@@ -68,7 +68,17 @@ button { font: inherit; color: inherit; }
 .toolbar__spacer { flex: 1; }
 
 /* Table */
-.tablewrap { padding: 0 var(--sp-5) var(--sp-8); overflow-x: auto; }
+/* overflow-x: auto alone silently computes overflow-y as auto too (the CSS
+   spec forces this when one axis is non-visible and the other isn't) --
+   which turns .tablewrap into an unintended scroll container. That becomes
+   the position:sticky containing block for the table header below instead
+   of the real page viewport, and since .tablewrap itself never actually
+   scrolls (it just grows with content), the header's "stuck" offset is
+   computed against the wrong reference frame -- producing exactly the kind
+   of erratic overlap/bleed-through seen when the real page scrolls.
+   overflow-y: visible keeps only the horizontal scrollbar this was meant
+   for and restores the header's sticky anchor to the actual viewport. */
+.tablewrap { padding: 0 var(--sp-5) var(--sp-8); overflow-x: auto; overflow-y: visible; }
 .jt { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 900px; }
 .jt thead th {
   text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;
