@@ -211,28 +211,45 @@ function renderTable() {
   $("table-empty").hidden = allJobs.length > 0;
 
   rows.forEach((job) => {
-    const tr = document.createElement("tr");
-    tr.addEventListener("click", () => openDetail(job.id));
+    // A single malformed record must never blank out every other row: if
+    // building this <tr> throws partway through, the row was never
+    // appended and the count (already set above) silently stopped
+    // matching what's on screen, with no error visible anywhere. Catch
+    // per-row so one bad job degrades to a "row failed to render" line
+    // instead of vanishing without a trace.
+    try {
+      const tr = document.createElement("tr");
+      tr.addEventListener("click", () => openDetail(job.id));
 
-    tr.appendChild(el("td", "c-title", job.title || "(untitled)"));
-    tr.appendChild(el("td", null, job.company || ""));
-    tr.appendChild(el("td", job.salary ? "" : "c-muted", job.salary || "US$0"));
-    tr.appendChild(el("td", null, job.location || ""));
+      tr.appendChild(el("td", "c-title", job.title || "(untitled)"));
+      tr.appendChild(el("td", null, job.company || ""));
+      tr.appendChild(el("td", job.salary ? "" : "c-muted", job.salary || "US$0"));
+      tr.appendChild(el("td", null, job.location || ""));
 
-    const st = document.createElement("td");
-    st.appendChild(el("span", "status-pill", job.status || "bookmarked"));
-    tr.appendChild(st);
+      const st = document.createElement("td");
+      st.appendChild(el("span", "status-pill", job.status || "bookmarked"));
+      tr.appendChild(st);
 
-    tr.appendChild(el("td", null, fmtDate(job.savedAt)));
-    tr.appendChild(dateCell(job, "deadline"));
-    tr.appendChild(dateCell(job, "appliedAt"));
-    tr.appendChild(followCell(job));
+      tr.appendChild(el("td", null, fmtDate(job.savedAt)));
+      tr.appendChild(dateCell(job, "deadline"));
+      tr.appendChild(dateCell(job, "appliedAt"));
+      tr.appendChild(followCell(job));
 
-    const ex = document.createElement("td");
-    ex.appendChild(starsInline(job, (v) => saveField(job.id, "excitement", v)));
-    tr.appendChild(ex);
+      const ex = document.createElement("td");
+      ex.appendChild(starsInline(job, (v) => saveField(job.id, "excitement", v)));
+      tr.appendChild(ex);
 
-    body.appendChild(tr);
+      body.appendChild(tr);
+    } catch (e) {
+      console.error("[JobGrab tracker] row render failed for job", job.id, job.title, e);
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = COLUMNS.length;
+      td.className = "c-muted";
+      td.textContent = `Couldn't display "${job.title || job.id || "this job"}" — open the browser console for details.`;
+      tr.appendChild(td);
+      body.appendChild(tr);
+    }
   });
 }
 
