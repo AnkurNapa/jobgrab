@@ -1,12 +1,12 @@
-# JobGrab — LinkedIn Job Tracker (v0.1)
+# JobGrab — LinkedIn Job Tracker (v0.2)
 
 ![JobGrab](screenshots/banner-hero.png)
 
-A Teal-style job-search companion. Sit on a LinkedIn job page, click **Save job**, and it grabs the title, company, location, salary, description snapshot, and job ID into a local Kanban tracker.
+A Teal-style job-search companion. Sit on a LinkedIn job page, click **Save job**, and it grabs the title, company, location, salary, description snapshot, and job ID into a local Kanban tracker — plus a Skills dashboard with a spider chart, word cloud, and status breakdown of your whole search.
 
 ## What it solves
 
-Job hunting on LinkedIn means constantly context-switching to a spreadsheet: copying the title, company, salary, deadline, and recruiter contact by hand for every job you're considering — and that spreadsheet drifts out of date the moment you stop maintaining it. JobGrab removes the copy-paste step entirely: one click on a LinkedIn job page captures everything automatically into a proper Kanban pipeline (Bookmarked → Applying → Applied → Interviewing → Negotiating → Accepted), with follow-up reminders and notes attached to each job — all stored locally in your own browser, no account or server involved.
+Job hunting on LinkedIn means constantly context-switching to a spreadsheet: copying the title, company, salary, deadline, and recruiter contact by hand for every job you're considering — and that spreadsheet drifts out of date the moment you stop maintaining it. JobGrab removes the copy-paste step entirely: one click on a LinkedIn job page captures everything automatically into a proper Kanban pipeline (Bookmarked → Applying → Applied → Interviewing → Negotiating → Accepted, or Rejected/Ghosted), with follow-up reminders and notes attached to each job — all stored locally in your own browser, no account or server involved. A dedicated Skills tab then rolls all of that up into a dashboard: which skills show up most across the titles you've saved, a word cloud from the actual job descriptions, a status-distribution donut, and your top companies by job count.
 
 ## How it works
 
@@ -71,10 +71,32 @@ A short chime + pop animation confirms each save (respects `prefers-reduced-moti
 ## The tracker (Teal-style)
 
 Left job list + right detail pane with a clickable **chevron status pipeline**
-(Bookmarked → Applying → Applied → Interviewing → Negotiating → Accepted → Closed), a star
+(Bookmarked → Applying → Applied → Interviewing → Negotiating → Accepted → Rejected → Ghosted), a star
 excitement rating, tabbed sections (Job Info, Notes, Contacts, Description), and a **Dates** row
 (Posted / Saved / Deadline / Applied / Follow up). Every field autosaves; deadlines within 7 days
-are highlighted. Export everything to CSV (UTF-8, Excel-safe).
+are highlighted. Export everything to CSV (UTF-8, Excel-safe). Status pills and the pipeline summary
+cards are color-coded per stage (amber while applying/negotiating, green once accepted, red if
+rejected, muted gray if ghosted) so where things stand reads at a glance.
+
+## Skills dashboard
+
+![Skills dashboard](screenshots/skills-dashboard.png)
+
+A fourth nav tab rolls your saved jobs up into a dashboard, built entirely from data you already
+captured — no extra tagging required:
+
+- **Top skill callout + spider chart** — a fixed keyword dictionary (Python, SQL, AWS, Product
+  Management, etc.) is matched against every saved job **title** (titles are always captured;
+  descriptions aren't every time), counted, and the top 8 plotted on a radar chart.
+- **Word cloud from job descriptions** — a broader, unfiltered view of whatever language actually
+  shows up in the full description snapshots (when captured from an open job page), stop-words
+  filtered out, sized by frequency.
+- **Status distribution donut** — every saved job's current pipeline stage, color-matched to the
+  same palette used in the table and pipeline summary.
+- **Top companies bar chart** — which companies you've saved the most jobs from.
+
+All four charts are hand-rolled inline SVG/CSS — no charting library — and follow the app's
+light/dark theme automatically.
 
 ## How it works
 

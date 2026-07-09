@@ -42,13 +42,14 @@ function setView(v) {
   view = v;
   $("table-view").hidden = v !== "jobs";
   $("detail-view").hidden = v !== "detail";
-  $("stub-view").hidden = !(v === "people" || v === "companies");
+  $("stub-view").hidden = !(v === "people" || v === "companies" || v === "skills");
   $("pipeline").style.display = v === "jobs" ? "" : "none";
   document.querySelector(".toolbar").style.display = v === "jobs" ? "" : "none";
   document.querySelectorAll(".nav__tab").forEach((t) =>
     t.classList.toggle("is-active", t.dataset.view === (v === "detail" ? "jobs" : v)));
   if (v === "people") renderPeople();
   if (v === "companies") renderCompanies();
+  if (v === "skills") renderSkills();
 }
 
 // ---------- People roll-up (unique contacts across saved jobs) ----------
@@ -134,7 +135,7 @@ function renderCompanies() {
     tr.appendChild(jt);
     const statuses = [...new Set(c.jobs.map((j) => j.status).filter(Boolean))];
     const stTd = document.createElement("td");
-    statuses.forEach((s) => stTd.appendChild(el("span", "status-pill", s)));
+    statuses.forEach((s) => { const p = el("span", "status-pill", s); p.dataset.status = s; stTd.appendChild(p); });
     tr.appendChild(stTd);
     const lk = document.createElement("td");
     if (c.url) { const a = el("a", null, "Open"); a.href = c.url; a.target = "_blank"; a.rel = "noopener noreferrer"; a.style.color = "var(--teal)"; lk.appendChild(a); }
@@ -147,14 +148,471 @@ function renderCompanies() {
   const wrap = el("div", "tablewrap"); wrap.appendChild(card); host.appendChild(wrap);
 }
 
+// ---------- Skills roll-up (spider chart of top skills by job title) ----------
+// A fixed keyword dictionary matched against job titles -- titles are always
+// captured (unlike descriptions, which aren't every time), so this is the
+// most reliable signal available without asking the user to tag skills by hand.
+const SKILL_KEYWORDS = [
+  "Python", "SQL", "Excel", "Power BI", "Tableau", "Machine Learning", "AI",
+  "Data Analysis", "Data Science", "Data Engineering", "Statistics", "R",
+  "JavaScript", "TypeScript", "React", "Node.js", "Java", "C++", "Go", "Ruby",
+  "AWS", "Azure", "GCP", "Cloud", "DevOps", "Docker", "Kubernetes",
+  "Product Management", "Project Management", "Program Management",
+  "Leadership", "Strategy", "Analyst", "Analytics", "Marketing", "Sales",
+  "SEO", "Content", "UX", "UI", "Design", "Figma", "Salesforce", "CRM",
+  "Finance", "Accounting", "HR", "Recruiting", "Customer Service",
+  "Operations", "Supply Chain", "Logistics", "Manufacturing", "QA",
+  "Security", "Networking", "Linux", "Git", "API", "ETL", "Big Data",
+  "NLP", "Deep Learning", "TensorFlow", "PyTorch", "Research", "Consulting",
+];
+// One representative emoji per skill/industry so the ranked list and radar
+// chart read faster than plain text alone -- purely decorative, keyed to
+// the same SKILL_KEYWORDS strings above.
+const SKILL_ICONS = {
+  Python: "🐍", SQL: "🗄️", Excel: "📈", "Power BI": "📊", Tableau: "📊",
+  "Machine Learning": "🤖", AI: "🤖", "Data Analysis": "📊", "Data Science": "🔬",
+  "Data Engineering": "🛠️", Statistics: "📐", R: "📉", JavaScript: "🟨",
+  TypeScript: "🔷", React: "⚛️", "Node.js": "🟢", Java: "☕", "C++": "➕",
+  Go: "🐹", Ruby: "💎", AWS: "☁️", Azure: "☁️", GCP: "☁️", Cloud: "☁️",
+  DevOps: "🔧", Docker: "🐳", Kubernetes: "☸️", "Product Management": "📦",
+  "Project Management": "📋", "Program Management": "📋", Leadership: "🧭",
+  Strategy: "♟️", Analyst: "🔍", Analytics: "📊", Marketing: "📣", Sales: "💼",
+  SEO: "🔎", Content: "✍️", UX: "🎨", UI: "🎨", Design: "🎨", Figma: "🎨",
+  Salesforce: "☁️", CRM: "📇", Finance: "💰", Accounting: "🧾", HR: "🧑‍💼",
+  Recruiting: "🧑‍💼", "Customer Service": "🎧", Operations: "⚙️",
+  "Supply Chain": "🚚", Logistics: "🚚", Manufacturing: "🏭", QA: "✅",
+  Security: "🔒", Networking: "🌐", Linux: "🐧", Git: "🔧", API: "🔌",
+  ETL: "🔄", "Big Data": "🗃️", NLP: "💬", "Deep Learning": "🧠",
+  TensorFlow: "🧠", PyTorch: "🧠", Research: "🔬", Consulting: "🧭",
+};
+function skillPattern(kw) {
+  // \b word-boundary matching keeps short keywords (R, AI, QA, UX...) from
+  // matching as substrings inside unrelated words.
+  const esc = kw.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`\\b${esc}\\b`, "i");
+}
+function extractSkills(title) {
+  const t = title || "";
+  return SKILL_KEYWORDS.filter((kw) => skillPattern(kw).test(t));
+}
+
+function renderSkills() {
+  const host = $("stub-view");
+  host.textContent = "";
+  host.append(el("h2", null, "Skills"));
+
+  const counts = new Map();
+  allJobs.forEach((j) => {
+    extractSkills(j.title).forEach((s) => counts.set(s, (counts.get(s) || 0) + 1));
+  });
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  if (!ranked.length) {
+    host.append(el("p", "empty",
+      "No recognizable skills yet. Skills are detected from job titles (e.g. \"Python\", \"Product Management\", \"AWS\") -- save a few more jobs and they will show up here."));
+    return;
+  }
+
+  const top = ranked.slice(0, 8);
+  const [topSkill, topCount] = top[0];
+  const totalJobs = allJobs.length;
+
+  const callout = el("div", "skills-callout");
+  callout.append(
+    el("span", "skills-callout__label", "Top skill"),
+    el("span", "skills-callout__value", `${SKILL_ICONS[topSkill] || ""} ${topSkill}`),
+    el("span", "skills-callout__meta", `in ${topCount} of ${totalJobs} saved job${totalJobs === 1 ? "" : "s"}`)
+  );
+  host.appendChild(callout);
+
+  // Dashboard row: radar chart, word cloud, status donut, top companies, locations.
+  const dash = el("div", "skills-dash");
+  dash.appendChild(radarChart(top.map(([skill, count]) => [`${SKILL_ICONS[skill] || ""} ${skill}`, count])));
+  dash.appendChild(wordCloud(allJobs));
+  dash.appendChild(statusDonut(allJobs));
+  dash.appendChild(companyBarChart(allJobs));
+  dash.appendChild(locationBarChart(allJobs));
+  dash.appendChild(roleLevelChart(allJobs));
+  host.appendChild(dash);
+
+  // Full ranked list below the dashboard row -- the chart caps at 8 axes
+  // for readability, but every detected skill still gets counted here.
+  const list = el("ul", "skills-list");
+  ranked.forEach(([skill, count]) => {
+    const li = document.createElement("li");
+    li.appendChild(el("span", "skills-list__name", `${SKILL_ICONS[skill] || ""} ${skill}`));
+    const bar = el("div", "skills-list__bar");
+    const fill = el("div", "skills-list__fill");
+    fill.style.width = `${Math.round((count / topCount) * 100)}%`;
+    bar.appendChild(fill);
+    li.appendChild(bar);
+    li.appendChild(el("span", "skills-list__count", String(count)));
+    list.appendChild(li);
+  });
+  host.appendChild(list);
+}
+
+// Word cloud of common terms across saved job descriptions -- a broader,
+// unfiltered complement to the fixed skills dictionary above: this surfaces
+// whatever language actually shows up in the JDs (tools, domains, phrases
+// the keyword list doesn't know about), not just the recognized skill set.
+const STOPWORDS = new Set((
+  "a an the and or but if of to in on for with at by from as is are was were " +
+  "be been being have has had do does did will would could should may might " +
+  "must can this that these those it its we you your our their his her they " +
+  "not no yes than then so such into about over under between out up down " +
+  "job role team work experience years year including etc using also all any " +
+  "more most other some what which who whom where when why how per each " +
+  "both few both same such only own same skills responsibilities requirements " +
+  "we're you'll we'll re ll ve don't we've apply looking join across within"
+).split(/\s+/));
+
+function wordFrequencies(jobs) {
+  const counts = new Map();
+  jobs.forEach((j) => {
+    const text = `${j.title || ""} ${htmlToText(j.descriptionHtml)}`.toLowerCase();
+    const words = text.match(/[a-z][a-z+#.-]{2,}/g) || [];
+    words.forEach((w) => {
+      const clean = w.replace(/^[-.]+|[-.]+$/g, "");
+      if (clean.length < 3 || STOPWORDS.has(clean)) return;
+      counts.set(clean, (counts.get(clean) || 0) + 1);
+    });
+  });
+  return counts;
+}
+
+function wordCloud(jobs) {
+  const withDesc = jobs.filter((j) => j.descriptionHtml);
+  const counts = wordFrequencies(jobs);
+  const ranked = [...counts.entries()].filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]).slice(0, 40);
+
+  const section = el("div", "word-cloud-section");
+  section.appendChild(el("h3", "sect", "Word cloud from job descriptions"));
+
+  if (!withDesc.length) {
+    section.appendChild(el("p", "empty",
+      "No job descriptions captured yet. The word cloud reads from each job's full description snapshot, which LinkedIn only exposes when you save from an open job page (not a search list) -- save a few that way and this fills in."));
+    return section;
+  }
+  if (!ranked.length) {
+    section.appendChild(el("p", "empty", "Not enough repeated terms yet across your saved descriptions."));
+    return section;
+  }
+
+  const max = ranked[0][1];
+  const min = ranked[ranked.length - 1][1];
+  const cloud = el("div", "word-cloud");
+  // A varied, on-brand palette (not just teal) so the cloud reads as
+  // colorful rather than a monochrome size-only list. Colors cycle by
+  // index, independent of frequency, purely for visual variety.
+  const PALETTE = ["var(--teal)", "var(--teal-strong)", "var(--teal-bright)", "var(--amber)", "var(--success)", "var(--ink)"];
+  // Shuffle for a natural cloud layout (not a strict frequency list top to
+  // bottom) while font-size still encodes the actual rank.
+  const shuffled = [...ranked].sort(() => Math.random() - 0.5);
+  shuffled.forEach(([word, count], i) => {
+    const t = max === min ? 1 : (count - min) / (max - min);
+    const span = el("span", "word-cloud__word", word);
+    span.style.fontSize = `${13 + t * 21}px`;
+    span.style.color = PALETTE[i % PALETTE.length];
+    span.title = `${count} mentions`;
+    cloud.appendChild(span);
+  });
+  section.appendChild(cloud);
+  return section;
+}
+
+// Same status -> color mapping as the CSS status-pill/pipe__step rules,
+// expressed as CSS var() references so this SVG stays in sync with theme
+// (light/dark) automatically without duplicating actual color values.
+const STATUS_CHART_COLOR = {
+  bookmarked: "var(--faint)", applying: "var(--amber)", applied: "var(--teal-bright)",
+  interviewing: "var(--teal)", negotiating: "var(--teal-strong)", accepted: "var(--success)",
+  rejected: "var(--danger)", ghosted: "var(--muted)",
+};
+
+function statusDonut(jobs) {
+  const section = el("div", "chart-card");
+  section.appendChild(el("h3", "sect", "Status distribution"));
+
+  const counts = new Map();
+  jobs.forEach((j) => { const s = j.status || "bookmarked"; counts.set(s, (counts.get(s) || 0) + 1); });
+  const entries = STATUSES.filter((s) => counts.has(s)).map((s) => [s, counts.get(s)]);
+
+  if (!entries.length) { section.appendChild(el("p", "empty", "No jobs yet.")); return section; }
+
+  const size = 200, cx = size / 2, cy = size / 2, rOuter = 90, rInner = 56;
+  const total = entries.reduce((sum, [, c]) => sum + c, 0);
+  const svgNs = "http://www.w3.org/2000/svg";
+  const svgEl = document.createElementNS(svgNs, "svg");
+  svgEl.setAttribute("viewBox", `0 0 ${size} ${size}`);
+  svgEl.setAttribute("width", String(size));
+  svgEl.setAttribute("height", String(size));
+
+  const arcPath = (startFrac, endFrac) => {
+    const a0 = startFrac * Math.PI * 2 - Math.PI / 2;
+    const a1 = endFrac * Math.PI * 2 - Math.PI / 2;
+    const large = endFrac - startFrac > 0.5 ? 1 : 0;
+    const p = (r, a) => [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+    const [ox0, oy0] = p(rOuter, a0), [ox1, oy1] = p(rOuter, a1);
+    const [ix1, iy1] = p(rInner, a1), [ix0, iy0] = p(rInner, a0);
+    return `M ${ox0} ${oy0} A ${rOuter} ${rOuter} 0 ${large} 1 ${ox1} ${oy1} ` +
+      `L ${ix1} ${iy1} A ${rInner} ${rInner} 0 ${large} 0 ${ix0} ${iy0} Z`;
+  };
+
+  let acc = 0;
+  entries.forEach(([status, count]) => {
+    const start = acc / total, end = (acc + count) / total;
+    acc += count;
+    const path = document.createElementNS(svgNs, "path");
+    path.setAttribute("d", entries.length === 1 ? "" : arcPath(start, end));
+    if (entries.length === 1) {
+      const c = document.createElementNS(svgNs, "circle");
+      c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", (rOuter + rInner) / 2);
+      c.setAttribute("fill", "none");
+      c.setAttribute("stroke", STATUS_CHART_COLOR[status] || "var(--teal)");
+      c.setAttribute("stroke-width", rOuter - rInner);
+      svgEl.appendChild(c);
+    } else {
+      path.setAttribute("fill", STATUS_CHART_COLOR[status] || "var(--teal)");
+      path.setAttribute("class", "donut-slice");
+      const title = document.createElementNS(svgNs, "title");
+      title.textContent = `${status}: ${count}`;
+      path.appendChild(title);
+      svgEl.appendChild(path);
+    }
+  });
+
+  const centerLabel = document.createElementNS(svgNs, "text");
+  centerLabel.setAttribute("x", cx); centerLabel.setAttribute("y", cy - 4);
+  centerLabel.setAttribute("text-anchor", "middle"); centerLabel.setAttribute("class", "donut-center-count");
+  centerLabel.textContent = String(total);
+  svgEl.appendChild(centerLabel);
+  const centerSub = document.createElementNS(svgNs, "text");
+  centerSub.setAttribute("x", cx); centerSub.setAttribute("y", cy + 14);
+  centerSub.setAttribute("text-anchor", "middle"); centerSub.setAttribute("class", "donut-center-sub");
+  centerSub.textContent = total === 1 ? "job" : "jobs";
+  svgEl.appendChild(centerSub);
+
+  const wrap = el("div", "donut-wrap");
+  wrap.appendChild(svgEl);
+  const legend = el("div", "donut-legend");
+  entries.forEach(([status, count]) => {
+    const item = el("span", "donut-legend__item");
+    const dot = el("span", "donut-legend__dot");
+    dot.style.background = STATUS_CHART_COLOR[status] || "var(--teal)";
+    item.append(dot, el("span", null, `${status} (${count})`));
+    legend.appendChild(item);
+  });
+  wrap.appendChild(legend);
+  section.appendChild(wrap);
+  return section;
+}
+
+function companyBarChart(jobs) {
+  const section = el("div", "chart-card");
+  section.appendChild(el("h3", "sect", "Top companies"));
+
+  const counts = new Map();
+  jobs.forEach((j) => {
+    const name = (j.company || "").trim();
+    if (name) counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
+
+  if (!ranked.length) { section.appendChild(el("p", "empty", "No companies yet.")); return section; }
+
+  const max = ranked[0][1];
+  const list = el("div", "company-bars");
+  ranked.forEach(([name, count]) => {
+    const row = el("div", "company-bars__row");
+    row.appendChild(el("span", "company-bars__name", name));
+    const track = el("div", "company-bars__track");
+    const fill = el("div", "company-bars__fill");
+    fill.style.width = `${Math.round((count / max) * 100)}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el("span", "company-bars__count", String(count)));
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+  return section;
+}
+
+// Country flags matched against job.location by keyword -- location is
+// free text ("Bengaluru, India", "EMEA", "Remote"), not a structured
+// country code, so this is a best-effort keyword match, not geo-parsing.
+// Anything that doesn't match a known country (regions like EMEA/APAC,
+// or "Remote") buckets into "Other / Remote" with a globe, transparently
+// rather than guessing wrong.
+const COUNTRY_FLAGS = [
+  ["india", "🇮🇳 India"], ["united states", "🇺🇸 United States"], ["usa", "🇺🇸 United States"],
+  ["united kingdom", "🇬🇧 United Kingdom"], [" uk", "🇬🇧 United Kingdom"], ["australia", "🇦🇺 Australia"],
+  ["canada", "🇨🇦 Canada"], ["germany", "🇩🇪 Germany"], ["singapore", "🇸🇬 Singapore"],
+  ["united arab emirates", "🇦🇪 UAE"], ["uae", "🇦🇪 UAE"], ["ireland", "🇮🇪 Ireland"],
+  ["netherlands", "🇳🇱 Netherlands"], ["france", "🇫🇷 France"], ["brazil", "🇧🇷 Brazil"],
+  ["japan", "🇯🇵 Japan"], ["china", "🇨🇳 China"], ["new zealand", "🇳🇿 New Zealand"],
+  ["philippines", "🇵🇭 Philippines"], ["vietnam", "🇻🇳 Vietnam"], ["spain", "🇪🇸 Spain"],
+  ["italy", "🇮🇹 Italy"], ["sweden", "🇸🇪 Sweden"], ["switzerland", "🇨🇭 Switzerland"],
+  ["mexico", "🇲🇽 Mexico"], ["south africa", "🇿🇦 South Africa"], ["nigeria", "🇳🇬 Nigeria"],
+  ["kenya", "🇰🇪 Kenya"], ["israel", "🇮🇱 Israel"], ["poland", "🇵🇱 Poland"],
+  ["portugal", "🇵🇹 Portugal"], ["indonesia", "🇮🇩 Indonesia"], ["malaysia", "🇲🇾 Malaysia"],
+  ["thailand", "🇹🇭 Thailand"], ["korea", "🇰🇷 South Korea"],
+];
+function flagForLocation(location) {
+  const loc = ` ${(location || "").toLowerCase()} `;
+  const hit = COUNTRY_FLAGS.find(([kw]) => loc.includes(kw));
+  return hit ? hit[1] : "🌐 Other / Remote";
+}
+
+function locationBarChart(jobs) {
+  const section = el("div", "chart-card");
+  section.appendChild(el("h3", "sect", "Top locations"));
+
+  const counts = new Map();
+  jobs.forEach((j) => {
+    if (!j.location) return;
+    const flagged = flagForLocation(j.location);
+    counts.set(flagged, (counts.get(flagged) || 0) + 1);
+  });
+  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 8);
+
+  if (!ranked.length) { section.appendChild(el("p", "empty", "No locations captured yet.")); return section; }
+
+  const max = ranked[0][1];
+  const list = el("div", "company-bars");
+  ranked.forEach(([name, count]) => {
+    const row = el("div", "company-bars__row");
+    row.appendChild(el("span", "company-bars__name", name));
+    const track = el("div", "company-bars__track");
+    const fill = el("div", "company-bars__fill");
+    fill.style.width = `${Math.round((count / max) * 100)}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el("span", "company-bars__count", String(count)));
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+  return section;
+}
+
+// Manager/Lead vs Individual Contributor -- a best-effort heuristic from
+// title keywords, not a guarantee (a "Lead Engineer" can be either in
+// practice). Documented as approximate rather than presented as fact.
+const MANAGER_KEYWORDS = /\b(manager|director|head of|head,|vp|vice president|chief|president|principal|executive)\b/i;
+function classifyRoleLevel(title) {
+  return MANAGER_KEYWORDS.test(title || "") ? "Manager / Lead" : "Individual Contributor";
+}
+
+function roleLevelChart(jobs) {
+  const section = el("div", "chart-card");
+  section.appendChild(el("h3", "sect", "Manager vs. IC"));
+
+  if (!jobs.length) { section.appendChild(el("p", "empty", "No jobs yet.")); return section; }
+
+  const counts = { "Manager / Lead": 0, "Individual Contributor": 0 };
+  jobs.forEach((j) => { counts[classifyRoleLevel(j.title)]++; });
+  const total = jobs.length;
+
+  const wrap = el("div", "role-split");
+  [["Manager / Lead", "role-split__bar--manager"], ["Individual Contributor", "role-split__bar--ic"]].forEach(([label, cls]) => {
+    const count = counts[label];
+    const pct = total ? Math.round((count / total) * 100) : 0;
+    const row = el("div", "role-split__row");
+    row.appendChild(el("span", "role-split__label", label));
+    const track = el("div", "role-split__track");
+    const fill = el("div", `role-split__fill ${cls}`);
+    fill.style.width = `${pct}%`;
+    track.appendChild(fill);
+    row.appendChild(track);
+    row.appendChild(el("span", "role-split__pct", `${pct}%`));
+    wrap.appendChild(row);
+  });
+  section.appendChild(wrap);
+  section.appendChild(el("p", "chart-card__note",
+    "Best-effort guess from title keywords (Manager, Director, Head of, VP...) -- not exact."));
+  return section;
+}
+
+// Hand-rolled SVG radar/spider chart -- no charting dependency, styled
+// entirely from the app's existing CSS custom properties so it matches
+// light/dark theme automatically.
+function radarChart(entries) {
+  // Wider-than-tall viewBox: labels overflow mostly left/right (long skill
+  // names anchored start/end at the horizontal extremes), not up/down, so
+  // the circle itself stays centered while the sides get extra breathing
+  // room instead of clipping a wrapped two-line label like "Machine Learning".
+  const w = 420, h = 380, cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 78;
+  const n = entries.length;
+  const max = Math.max(...entries.map(([, c]) => c), 1);
+  const angleFor = (i) => (Math.PI * 2 * i) / n - Math.PI / 2;
+  const pointFor = (i, frac) => {
+    const a = angleFor(i);
+    return [cx + Math.cos(a) * r * frac, cy + Math.sin(a) * r * frac];
+  };
+
+  const svgNs = "http://www.w3.org/2000/svg";
+  const svgEl = document.createElementNS(svgNs, "svg");
+  svgEl.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  svgEl.setAttribute("width", String(w));
+  svgEl.setAttribute("height", String(h));
+  svgEl.classList.add("radar-chart");
+
+  const mk = (tag, attrs) => {
+    const node = document.createElementNS(svgNs, tag);
+    for (const k in attrs) node.setAttribute(k, attrs[k]);
+    return node;
+  };
+
+  // Grid rings at 25/50/75/100%.
+  [0.25, 0.5, 0.75, 1].forEach((frac) => {
+    const pts = entries.map((_, i) => pointFor(i, frac).join(",")).join(" ");
+    svgEl.appendChild(mk("polygon", { points: pts, class: "radar-chart__ring" }));
+  });
+
+  // Spokes + axis labels. Long labels wrap onto a second tspan line instead
+  // of running off the edge of the viewBox (e.g. "Machine Learning" was
+  // getting clipped to "...irning" on the left side before this).
+  entries.forEach(([skill], i) => {
+    const [x, y] = pointFor(i, 1);
+    svgEl.appendChild(mk("line", { x1: cx, y1: cy, x2: x, y2: y, class: "radar-chart__spoke" }));
+    const [lx, ly] = pointFor(i, 1.3);
+    const anchor = lx > cx + 4 ? "start" : lx < cx - 4 ? "end" : "middle";
+    const label = mk("text", { x: lx, y: ly, class: "radar-chart__label", "text-anchor": anchor });
+    const words = skill.split(" ");
+    const lines = words.length > 1 && skill.length > 10
+      ? [words.slice(0, Math.ceil(words.length / 2)).join(" "), words.slice(Math.ceil(words.length / 2)).join(" ")]
+      : [skill];
+    const startDy = ly < cy - 4 ? -(lines.length - 1) * 12 : ly > cy + 4 ? 0 : -((lines.length - 1) * 12) / 2;
+    lines.forEach((line, li) => {
+      const tspan = mk("tspan", { x: lx, dy: li === 0 ? startDy : 12 });
+      tspan.textContent = line;
+      label.appendChild(tspan);
+    });
+    svgEl.appendChild(label);
+  });
+
+  // Data polygon.
+  const dataPts = entries.map(([, count], i) => pointFor(i, count / max).join(",")).join(" ");
+  svgEl.appendChild(mk("polygon", { points: dataPts, class: "radar-chart__data" }));
+  entries.forEach(([, count], i) => {
+    const [x, y] = pointFor(i, count / max);
+    svgEl.appendChild(mk("circle", { cx: x, cy: y, r: 3.5, class: "radar-chart__dot" }));
+  });
+
+  const wrap = el("div", "radar-chart__wrap");
+  wrap.appendChild(svgEl);
+  return wrap;
+}
+
 // ---------- pipeline summary ----------
 function renderPipeline() {
   const pipe = $("pipeline");
   pipe.textContent = "";
   const counts = Object.fromEntries(STATUSES.map((s) => [s, 0]));
   allJobs.forEach((j) => { if (counts[j.status] != null) counts[j.status]++; });
-  STATUSES.filter((s) => s !== "closed").forEach((s) => {
+  STATUSES.filter((s) => s !== "rejected" && s !== "ghosted").forEach((s) => {
     const step = el("div", "pipe__step" + (statusFilter === s ? " is-active" : ""));
+    step.dataset.status = s;
     const c = counts[s] || 0;
     step.append(el("div", "pipe__count" + (c ? "" : " zero"), c ? String(c) : "--"),
       el("span", "pipe__label", s));
@@ -229,7 +687,9 @@ function renderTable() {
       tr.appendChild(el("td", null, job.location || ""));
 
       const st = document.createElement("td");
-      st.appendChild(el("span", "status-pill", job.status || "bookmarked"));
+      const pill = el("span", "status-pill", job.status || "bookmarked");
+      pill.dataset.status = job.status || "bookmarked";
+      st.appendChild(pill);
       tr.appendChild(st);
 
       tr.appendChild(el("td", null, fmtDate(job.savedAt)));

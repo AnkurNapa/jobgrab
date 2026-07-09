@@ -121,6 +121,28 @@ button { font: inherit; color: inherit; }
   font-weight: 600;
 }
 .status-pill + .status-pill { margin-left: 5px; }
+
+/* Status color-coding: each pipeline stage gets its own semantic color
+   instead of every stage sharing the same teal, so the stage a job is in
+   reads at a glance across the table, the Companies roll-up, and the
+   pipeline summary cards. Applied by [data-status] on the pill/card. */
+.status-pill[data-status="applying"],
+.pipe__step[data-status="applying"] .pipe__count:not(.zero) {
+  background: color-mix(in oklch, var(--amber) 22%, transparent); color: color-mix(in oklch, var(--amber) 55%, var(--ink));
+}
+.status-pill[data-status="negotiating"],
+.pipe__step[data-status="negotiating"] .pipe__count:not(.zero) {
+  background: color-mix(in oklch, var(--amber) 38%, transparent); color: color-mix(in oklch, var(--amber) 70%, var(--ink) 30%);
+}
+.status-pill[data-status="accepted"],
+.pipe__step[data-status="accepted"] .pipe__count:not(.zero) {
+  background: color-mix(in oklch, var(--success) 20%, transparent); color: var(--success);
+}
+.status-pill[data-status="rejected"] { background: var(--danger-soft); color: var(--danger); }
+.status-pill[data-status="ghosted"] { background: var(--surface-2); color: var(--muted); }
+.pipe__step[data-status="applying"].is-active,
+.pipe__step[data-status="negotiating"].is-active { border-color: var(--amber); box-shadow: inset 0 0 0 1px var(--amber); }
+.pipe__step[data-status="accepted"].is-active { border-color: var(--success); box-shadow: inset 0 0 0 1px var(--success); }
 .mini-date {
   border: 1px solid var(--line); border-radius: var(--r-sm); padding: 5px 7px;
   font: inherit; color: var(--ink); background: var(--surface);
@@ -134,6 +156,89 @@ button { font: inherit; color: inherit; }
 .stub { padding: var(--sp-5); color: var(--ink); }
 .stub h2 { margin: 0 0 var(--sp-3); letter-spacing: -0.01em; }
 .stub .tablewrap { padding: 0; }
+
+/* Skills: top-skill callout + spider chart + ranked list */
+.skills-callout {
+  display: flex; align-items: baseline; gap: var(--sp-3); flex-wrap: wrap;
+  background: var(--teal-soft); border: 1px solid color-mix(in oklch, var(--teal) 30%, var(--line));
+  border-radius: var(--r-lg); padding: var(--sp-4) var(--sp-5); margin-bottom: var(--sp-5);
+}
+.skills-callout__label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.05em; color: var(--teal-strong); font-weight: 700; }
+.skills-callout__value { font-size: var(--text-xl); font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+.skills-callout__meta { color: var(--muted); font-size: var(--text-sm); }
+
+/* Dashboard row: radar chart + word cloud side by side, stacking on
+   narrow viewports since each card has a sensible min-width of its own. */
+.skills-dash { display: flex; gap: var(--sp-5); flex-wrap: wrap; margin-bottom: var(--sp-5); align-items: stretch; }
+
+.radar-chart__wrap {
+  display: flex; justify-content: center; align-items: center; padding: var(--sp-4);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1); flex: 1 1 420px; min-width: 320px;
+}
+.radar-chart__ring { fill: none; stroke: var(--line); stroke-width: 1; }
+.radar-chart__spoke { stroke: var(--line); stroke-width: 1; }
+.radar-chart__data { fill: color-mix(in oklch, var(--teal) 22%, transparent); stroke: var(--teal); stroke-width: 2; }
+.radar-chart__dot { fill: var(--teal-strong); }
+.radar-chart__label { fill: var(--muted); font-size: 11px; font-weight: 600; }
+
+.skills-list { list-style: none; margin: 0; padding: 0; max-width: 560px; }
+.skills-list li { display: flex; align-items: center; gap: var(--sp-3); padding: 7px 0; }
+.skills-list__name { flex: 0 0 150px; font-weight: 600; font-size: var(--text-sm); }
+.skills-list__bar { flex: 1; height: 8px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.skills-list__fill { height: 100%; background: var(--teal); border-radius: var(--r-pill); }
+.skills-list__count { flex: 0 0 24px; text-align: right; color: var(--muted); font-size: var(--text-sm); font-weight: 700; }
+
+.word-cloud-section { flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; }
+.word-cloud-section .sect { margin-top: 0; }
+.word-cloud {
+  flex: 1;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; align-content: center;
+  gap: var(--sp-2) var(--sp-4);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1); padding: var(--sp-5);
+}
+.word-cloud__word {
+  font-weight: 700; line-height: 1.3; cursor: default;
+  transition: transform var(--dur-fast), opacity var(--dur-fast);
+}
+.word-cloud__word:hover { transform: scale(1.1); opacity: 0.85; }
+
+/* Generic dashboard tile used by the status donut and top-companies charts --
+   same card language (border/radius/shadow) as the radar chart and word cloud. */
+.chart-card {
+  flex: 1 1 300px; min-width: 260px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1); padding: var(--sp-5);
+}
+.chart-card .sect { margin-top: 0; }
+
+.donut-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--sp-4); }
+.donut-slice { transition: opacity var(--dur-fast); cursor: default; }
+.donut-slice:hover { opacity: 0.8; }
+.donut-center-count { font-size: 30px; font-weight: 800; fill: var(--ink); letter-spacing: -0.02em; }
+.donut-center-sub { font-size: 11px; fill: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.donut-legend { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); justify-content: center; }
+.donut-legend__item { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-sm); color: var(--muted); text-transform: capitalize; }
+.donut-legend__dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+
+.company-bars { display: flex; flex-direction: column; gap: var(--sp-3); }
+.company-bars__row { display: flex; align-items: center; gap: var(--sp-3); }
+.company-bars__name { flex: 0 0 140px; font-weight: 600; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.company-bars__track { flex: 1; height: 10px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.company-bars__fill { height: 100%; border-radius: var(--r-pill); background: linear-gradient(90deg, var(--teal-bright), var(--teal-strong)); }
+.company-bars__count { flex: 0 0 20px; text-align: right; font-size: var(--text-sm); font-weight: 700; color: var(--muted); }
+
+.chart-card__note { margin: var(--sp-3) 0 0; font-size: 11px; color: var(--faint); font-style: italic; }
+
+.role-split { display: flex; flex-direction: column; gap: var(--sp-4); }
+.role-split__row { display: flex; align-items: center; gap: var(--sp-3); }
+.role-split__label { flex: 0 0 150px; font-weight: 600; font-size: var(--text-sm); }
+.role-split__track { flex: 1; height: 14px; border-radius: var(--r-pill); background: var(--surface-2); overflow: hidden; }
+.role-split__fill { height: 100%; border-radius: var(--r-pill); }
+.role-split__fill--manager { background: var(--teal-strong); }
+.role-split__fill--ic { background: var(--teal-bright); }
+.role-split__pct { flex: 0 0 40px; text-align: right; font-weight: 700; font-size: var(--text-sm); color: var(--muted); }
 
 /* Buttons */
 .btn {
