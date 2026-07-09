@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="../styles/tokens.css" />
+    <link rel="stylesheet" href="app.css" />
+    <title>JobGrab Board</title>
+  </head>
+  <body>
+    <!-- Top nav -->
+    <header class="nav">
+      <div class="nav__brand"><img class="nav__logo" src="../icons/icon48.png" alt="" width="24" height="24" />JobGrab</div>
+      <nav class="nav__tabs">
+        <button class="nav__tab is-active" data-view="jobs" data-icon="jobs">Jobs</button>
+        <button class="nav__tab" data-view="people" data-icon="people">People</button>
+        <button class="nav__tab" data-view="companies" data-icon="companies">Companies</button>
+      </nav>
+      <div class="nav__spacer"></div>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle light / dark" aria-label="Toggle light or dark theme">◐</button>
+    </header>
+
+    <!-- Pipeline summary -->
+    <section id="pipeline" class="pipe" aria-label="Status summary"></section>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <span class="toolbar__searchwrap">
+        <span class="ic" data-icon="search"></span>
+        <input id="search" class="toolbar__search" type="search" placeholder="Search jobs" />
+      </span>
+      <span id="count" class="toolbar__count"></span>
+      <div class="toolbar__spacer"></div>
+      <button id="export" class="btn btn--ghost" data-icon="download">Export CSV</button>
+      <button id="add" class="btn" data-icon="plus">Add Job</button>
+    </div>
+
+    <!-- Table view -->
+    <main id="table-view" class="tablewrap">
+      <table class="jt">
+        <thead>
+          <tr id="jt-head"></tr>
+        </thead>
+        <tbody id="jt-body"></tbody>
+      </table>
+      <p id="table-empty" class="empty" hidden>
+        No jobs yet. Open a LinkedIn job and click the teal Save job button, or use + Add Job.
+      </p>
+    </main>
+
+    <!-- Detail view -->
+    <main id="detail-view" class="detail" hidden></main>
+
+    <!-- People / Companies placeholders -->
+    <main id="stub-view" class="stub" hidden></main>
+
+    <template id="detail-tpl">
+      <button id="d-back" class="btn btn--ghost detail__back" data-icon="arrowLeft">Back to all jobs</button>
+      <header class="jd-head">
+        <div class="jd-head__main">
+          <h2 id="d-title" class="jd-title"></h2>
+          <p class="jd-sub">
+            <span id="d-company" class="jd-company"></span>
+            <span id="d-loc-wrap" hidden> — <span id="d-location"></span></span>
+          </p>
+          <p class="jd-saved">Saved <span id="d-savedon"></span> on
+            <a id="d-source" href="#" target="_blank" rel="noopener noreferrer">linkedin.com</a></p>
+        </div>
+        <div class="jd-head__aside">
+          <div id="d-stars" class="stars" title="Excitement"></div>
+          <button id="d-delete" class="btn btn--danger" data-icon="trash">Delete</button>
+        </div>
+      </header>
+      <nav id="d-pipeline" class="pipeline" aria-label="Application status"></nav>
+      <div class="tabs" id="d-tabs">
+        <button class="tab is-active" data-tab="info">Job Info</button>
+        <button class="tab" data-tab="notes">Notes</button>
+        <button class="tab" data-tab="contact">Contacts</button>
+        <button class="tab" data-tab="desc">Description</button>
+      </div>
+      <section class="panelt" data-panel="info">
+        <h3 class="sect">Dates</h3>
+        <div class="grid">
+          <label class="fld">Posted<input type="date" data-field="posted" /></label>
+          <label class="fld">Saved<input type="date" data-field="savedDate" disabled /></label>
+          <label class="fld">Deadline<input type="date" data-field="deadline" /></label>
+          <label class="fld">Applied<input type="date" data-field="appliedAt" /></label>
+          <label class="fld">Follow up<input type="date" data-field="followUpAt" /></label>
+        </div>
+        <h3 class="sect">Details</h3>
+        <div class="grid">
+          <label class="fld">Salary<input type="text" data-field="salary" placeholder="Add salary" /></label>
+          <label class="fld">Workplace<input type="text" data-field="workplaceType" placeholder="Remote / Hybrid" /></label>
+          <label class="fld">Employment<input type="text" data-field="employmentType" placeholder="Full-time" /></label>
+          <label class="fld">Apply URL<input type="url" data-field="applyUrl" placeholder="https://" /></label>
+        </div>
+      </section>
+      <section class="panelt" data-panel="notes" hidden>
+        <textarea data-field="notes" rows="10" placeholder="Recruiter name, next step, interview prep..."></textarea>
+      </section>
+      <section class="panelt" data-panel="contact" hidden>
+        <div class="grid">
+          <label class="fld">Contact person<input type="text" data-field="contactName" placeholder="Name" /></label>
+          <label class="fld">Contact title<input type="text" data-field="contactTitle" placeholder="Recruiter" /></label>
+          <label class="fld fld--wide">Contact LinkedIn
+            <input type="url" data-field="contactLinkedIn" placeholder="https://www.linkedin.com/in/..." /></label>
+        </div>
+        <a id="d-contact-open" class="btn btn--ghost" target="_blank" rel="noopener noreferrer" hidden>Open LinkedIn profile</a>
+      </section>
+      <section class="panelt" data-panel="desc" hidden>
+        <div id="d-desc" class="desc"></div>
+      </section>
+    </template>
+
+    <footer class="site-foot">
+      <p id="daily-quote" class="site-foot__quote"></p>
+      <span class="site-foot__feedback">Have ideas or found a bug? Feel free to give me feedback —
+        <a href="mailto:napaankur@gmail.com?subject=JobGrab%20feedback">napaankur@gmail.com</a></span>
+      <span class="site-foot__by">Built by
+        <a href="https://www.linkedin.com/in/ankur-napa/" target="_blank" rel="noopener noreferrer">Ankur Napa</a></span>
+    </footer>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

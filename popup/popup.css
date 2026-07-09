@@ -1,0 +1,49 @@
+/* Palette, type and neutrals come from ../styles/tokens.css (light + dark aware). */
+* { box-sizing: border-box; }
+body {
+  width: 340px;
+  margin: 0;
+  font: var(--text-base, 14px) / 1.4 var(--font, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+  color: var(--ink);
+  background: var(--surface);
+}
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.pop-head h1 { margin: 0; font-size: 16px; color: var(--teal); }
+.pop-link {
+  border: none;
+  background: none;
+  color: var(--teal);
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 13px;
+}
+.pop-counts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+.pop-counts .chip {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: var(--r-pill, 999px);
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.pop-counts .chip b { color: var(--ink); }
+.pop-recent { list-style: none; margin: 0; padding: 0 6px 10px; }
+.pop-recent li {
+  padding: 8px;
+  border-radius: var(--r-sm, 8px);
+}
+.pop-recent li:hover { background: var(--surface-2); }
+.pop-recent a { text-decoration: none; color: var(--ink); display: block; }
+.pop-recent .title { font-weight: 600; }
+.pop-recent .sub { color: var(--muted); font-size: 12px; }
+.pop-empty { padding: 18px 14px; color: var(--muted); }

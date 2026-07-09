@@ -1,0 +1,78 @@
+/* Floating action button injected on LinkedIn job pages.
+   High z-index + fixed so it survives LinkedIn's layout; scoped class names
+   prefixed with jobgrab- to avoid clashing with host styles. */
+
+.jobgrab-fab {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 2147483647;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 999px;
+  font: 600 14px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #fff;
+  background: #0a7d6b;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: transform 120ms ease, background 120ms ease, opacity 120ms ease;
+}
+.jobgrab-fab:hover {
+  transform: translateY(-2px);
+  background: #0b8e79;
+}
+.jobgrab-fab:active {
+  transform: translateY(0);
+}
+.jobgrab-fab__img {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: block;
+}
+.jobgrab-fab[data-state="nojob"] {
+  background: #4b5563;
+  opacity: 0.9;
+}
+
+/* Save celebration: a springy pop + a green ring pulse. */
+.jobgrab-fab.jobgrab-pop {
+  animation: jobgrab-pop 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.jobgrab-fab.jobgrab-pop::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 2px solid #34d399;
+  animation: jobgrab-ring 0.6s ease-out forwards;
+  pointer-events: none;
+}
+@keyframes jobgrab-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18); }
+  60% { transform: scale(0.94); }
+  100% { transform: scale(1); }
+}
+@keyframes jobgrab-ring {
+  0% { opacity: 0.9; transform: scale(0.85); }
+  100% { opacity: 0; transform: scale(1.5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .jobgrab-fab.jobgrab-pop { animation: none; }
+  .jobgrab-fab.jobgrab-pop::after { animation: none; display: none; }
+}
+.jobgrab-fab[data-state="saving"] {
+  background: #6b7280;
+  cursor: default;
+}
+.jobgrab-fab[data-state="saved"],
+.jobgrab-fab[data-state="exists"] {
+  background: #157347;
+}
+.jobgrab-fab[data-state="error"] {
+  background: #b02a37;
+}

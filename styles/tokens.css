@@ -1,0 +1,98 @@
+/* tokens.css - JobGrab design system. Single source for palette, type scale,
+   spacing rhythm, radius, shadow and motion. Themed for light + dark; the board
+   respects prefers-color-scheme and an explicit [data-theme] override. */
+
+:root {
+  /* Teal brand ramp (oklch for perceptual consistency) */
+  --teal:        oklch(52% 0.09 178);
+  --teal-strong: oklch(44% 0.09 178);
+  --teal-bright: oklch(58% 0.10 178);
+  --teal-soft:   oklch(95% 0.03 178);
+
+  /* Neutrals */
+  --bg:      oklch(98.5% 0.003 240);
+  --surface: oklch(100% 0 0);
+  --surface-2: oklch(97% 0.004 240);
+  --ink:     oklch(28% 0.02 200);
+  --muted:   oklch(55% 0.02 240);
+  --faint:   oklch(78% 0.015 240);
+  --line:    oklch(92% 0.005 240);
+
+  /* Semantic accents */
+  --amber:   oklch(80% 0.15 85);
+  --danger:  oklch(55% 0.18 22);
+  --danger-soft: oklch(94% 0.04 22);
+  --success: oklch(56% 0.13 155);
+
+  /* Type scale */
+  --text-xs:  11px;
+  --text-sm:  12.5px;
+  --text-base: 14px;
+  --text-lg:  16px;
+  --text-xl:  clamp(20px, 1.2rem + 0.6vw, 26px);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  /* Spacing rhythm (4px base) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 22px; --sp-6: 30px; --sp-8: 44px;
+
+  /* Radius */
+  --r-sm: 7px; --r-md: 10px; --r-lg: 14px; --r-pill: 999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px oklch(0% 0 0 / 0.05), 0 1px 3px oklch(0% 0 0 / 0.06);
+  --shadow-2: 0 6px 16px oklch(0% 0 0 / 0.08), 0 2px 6px oklch(0% 0 0 / 0.06);
+  --shadow-3: 0 14px 44px oklch(0% 0 0 / 0.18);
+
+  /* Motion */
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --teal:        oklch(66% 0.10 178);
+    --teal-strong: oklch(58% 0.10 178);
+    --teal-bright: oklch(72% 0.11 178);
+    --teal-soft:   oklch(32% 0.05 178);
+    --bg:      oklch(20% 0.01 240);
+    --surface: oklch(24% 0.012 240);
+    --surface-2: oklch(27% 0.013 240);
+    --ink:     oklch(93% 0.01 240);
+    --muted:   oklch(70% 0.02 240);
+    --faint:   oklch(45% 0.02 240);
+    --line:    oklch(33% 0.012 240);
+    --amber:   oklch(82% 0.15 85);
+    --danger:  oklch(68% 0.17 22);
+    --danger-soft: oklch(32% 0.07 22);
+    --success: oklch(70% 0.13 155);
+    --shadow-1: 0 1px 2px oklch(0% 0 0 / 0.3);
+    --shadow-2: 0 6px 16px oklch(0% 0 0 / 0.4);
+    --shadow-3: 0 14px 44px oklch(0% 0 0 / 0.55);
+  }
+}
+
+/* Explicit override wins over the OS signal, both directions. */
+:root[data-theme="light"] {
+  --teal: oklch(52% 0.09 178); --teal-strong: oklch(44% 0.09 178);
+  --teal-bright: oklch(58% 0.10 178); --teal-soft: oklch(95% 0.03 178);
+  --bg: oklch(98.5% 0.003 240); --surface: oklch(100% 0 0); --surface-2: oklch(97% 0.004 240);
+  --ink: oklch(28% 0.02 200); --muted: oklch(55% 0.02 240); --faint: oklch(78% 0.015 240);
+  --line: oklch(92% 0.005 240); --danger-soft: oklch(94% 0.04 22);
+}
+:root[data-theme="dark"] {
+  --teal: oklch(66% 0.10 178); --teal-strong: oklch(58% 0.10 178);
+  --teal-bright: oklch(72% 0.11 178); --teal-soft: oklch(32% 0.05 178);
+  --bg: oklch(20% 0.01 240); --surface: oklch(24% 0.012 240); --surface-2: oklch(27% 0.013 240);
+  --ink: oklch(93% 0.01 240); --muted: oklch(70% 0.02 240); --faint: oklch(45% 0.02 240);
+  --line: oklch(33% 0.012 240); --danger-soft: oklch(32% 0.07 22);
+}
+
+/* Shared icon sizing */
+.ic { display: inline-flex; align-items: center; justify-content: center; }
+.ic svg { display: block; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="../styles/tokens.css" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>JobGrab</title>
+  </head>
+  <body>
+    <header class="pop-head">
+      <h1>JobGrab</h1>
+      <button id="open-tracker" class="pop-link">Open tracker &rarr;</button>
+    </header>
+    <div id="counts" class="pop-counts"></div>
+    <ul id="recent" class="pop-recent"></ul>
+    <p id="empty" class="pop-empty" hidden>
+      No jobs yet. Open a LinkedIn job and click <strong>Save job</strong>.
+    </p>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
