@@ -13,11 +13,27 @@
     if (p && /^\d+$/.test(p)) return p;
     const m = location.pathname.match(/\/jobs\/view\/(\d+)/);
     if (m) return m[1];
-    const urn = document.querySelector("[data-job-id], [data-entity-urn*='jobPosting']");
-    if (urn) {
-      const raw = urn.getAttribute("data-job-id") || urn.getAttribute("data-entity-urn") || "";
+    // Scope the DOM fallback to the open job's own detail pane. An unscoped
+    // document-wide query returns the first DOM match, which on a search or
+    // collections panel is a card in the results list -- not whichever job
+    // is actually open -- so every save would silently collapse onto that
+    // one list item's id instead of the job you meant to capture.
+    const detailRoot = document.querySelector(
+      "#job-details, .job-details-jobs-unified-top-card__container, .jobs-details__main-content"
+    ) || document.querySelector(
+      ".job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title"
+    );
+    const scope = (detailRoot && detailRoot.closest("[data-job-id], [data-entity-urn*='jobPosting']")) || detailRoot;
+    if (scope && scope.getAttribute) {
+      const raw = scope.getAttribute("data-job-id") || scope.getAttribute("data-entity-urn") || "";
       const mm = raw.match(/(\d{6,})/);
       if (mm) return mm[1];
+    }
+    // Last resort: the canonical /jobs/view/<id> link inside the detail pane.
+    const link = (detailRoot || document).querySelector("a[href*='/jobs/view/']");
+    if (link) {
+      const lm = link.href.match(/\/jobs\/view\/(\d+)/);
+      if (lm) return lm[1];
     }
     return null;
   }
