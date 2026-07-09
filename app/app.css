@@ -74,7 +74,13 @@ button { font: inherit; color: inherit; }
   text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--muted); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line);
   cursor: pointer; white-space: nowrap; user-select: none;
-  position: sticky; top: 58px; background: var(--bg); z-index: 5;
+  /* --nav-h is measured live from the actual .nav element (see app.js) so this
+     never drifts from a hardcoded guess -- a mismatch here overlaps the sticky
+     header onto the row scrolled beneath it, clipping whichever cells sit at
+     the top of a tall (wrapped-title) row while shorter, vertically-centered
+     cells in the same row peek out underneath. 58px is only the pre-JS/no-JS
+     fallback. */
+  position: sticky; top: var(--nav-h, 58px); background: var(--bg); z-index: 5;
   transition: color var(--dur-fast);
 }
 .jt thead th:hover { color: var(--ink); }
