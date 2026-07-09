@@ -1,6 +1,25 @@
 # JobGrab — LinkedIn Job Tracker (v0.1)
 
+![JobGrab](screenshots/banner-hero.png)
+
 A Teal-style job-search companion. Sit on a LinkedIn job page, click **Save job**, and it grabs the title, company, location, salary, description snapshot, and job ID into a local Kanban tracker.
+
+## What it solves
+
+Job hunting on LinkedIn means constantly context-switching to a spreadsheet: copying the title, company, salary, deadline, and recruiter contact by hand for every job you're considering — and that spreadsheet drifts out of date the moment you stop maintaining it. JobGrab removes the copy-paste step entirely: one click on a LinkedIn job page captures everything automatically into a proper Kanban pipeline (Bookmarked → Applying → Applied → Interviewing → Negotiating → Accepted), with follow-up reminders and notes attached to each job — all stored locally in your own browser, no account or server involved.
+
+## How it works
+
+![How it works](screenshots/banner-how-it-works.png)
+
+1. **Open a job on LinkedIn** — a floating teal "Save job" button appears on any job page or open panel.
+2. **Click to auto-capture** — `content/scraper.js` reads the page (current selectors, with a JSON-LD `JobPosting` fallback so it keeps working when LinkedIn changes its markup).
+3. **Lands on your board** — saved to `chrome.storage.local`, deduped by LinkedIn job ID.
+4. **Track it to the offer** — drag cards between pipeline stages, add notes/contacts, set follow-up dates, export to CSV anytime.
+
+## How this was made
+
+Built as a Manifest V3 Chrome extension with a layered architecture: a content script (`content/scraper.js` + `content/inject.js`) handles page scraping and the floating save button with a `MutationObserver` to survive LinkedIn's single-page-app navigation; a stateless `background/service-worker.js` routes messages between the popup, content script, and tracker; and `lib/store.js` is a thin persistence layer over `chrome.storage.local` with schema migration on read. The tracker board (`app/`) and quick-add panel are vanilla HTML/CSS/JS — no framework — rendered in a Shadow DOM on the LinkedIn page so the host site's CSS can't distort the UI. Built with [Claude Code](https://claude.com/claude-code).
 
 ## Screenshots
 
