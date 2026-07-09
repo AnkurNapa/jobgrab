@@ -67,44 +67,53 @@ button { font: inherit; color: inherit; }
 .toolbar__count { color: var(--muted); font-size: var(--text-sm); }
 .toolbar__spacer { flex: 1; }
 
-/* Table */
-/* overflow-x: auto alone silently computes overflow-y as auto too (the CSS
-   spec forces this when one axis is non-visible and the other isn't) --
-   which turns .tablewrap into an unintended scroll container. That becomes
-   the position:sticky containing block for the table header below instead
-   of the real page viewport, and since .tablewrap itself never actually
-   scrolls (it just grows with content), the header's "stuck" offset is
-   computed against the wrong reference frame -- producing exactly the kind
-   of erratic overlap/bleed-through seen when the real page scrolls.
-   overflow-y: visible keeps only the horizontal scrollbar this was meant
-   for and restores the header's sticky anchor to the actual viewport. */
-.tablewrap { padding: 0 var(--sp-5) var(--sp-8); overflow-x: auto; overflow-y: visible; }
+/* Table
+   The header used to stick to the outer page viewport, requiring its
+   sticky offset to exactly match the nav bar's height -- any mismatch
+   (font metrics, zoom, or .tablewrap's overflow-x quietly promoting
+   overflow-y to auto and hijacking the sticky containing block) bled the
+   header into whatever row was scrolled underneath it. Giving the table
+   its own bounded, self-scrolling card removes that coordination problem
+   entirely: the header's position: sticky; top: 0 now anchors to THIS
+   container, which is the only thing that scrolls, so there is no outer
+   offset to keep in sync in the first place. */
+.tablewrap { padding: 0 var(--sp-5) var(--sp-8); }
+.tablecard {
+  border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface);
+  box-shadow: var(--shadow-1); overflow: auto; max-height: calc(100vh - 300px); min-height: 220px;
+}
 .jt { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 900px; }
 .jt thead th {
   text-align: left; font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em;
   color: var(--muted); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line);
   cursor: pointer; white-space: nowrap; user-select: none;
-  /* --nav-h is measured live from the actual .nav element (see app.js) so this
-     never drifts from a hardcoded guess -- a mismatch here overlaps the sticky
-     header onto the row scrolled beneath it, clipping whichever cells sit at
-     the top of a tall (wrapped-title) row while shorter, vertically-centered
-     cells in the same row peek out underneath. 58px is only the pre-JS/no-JS
-     fallback. */
-  position: sticky; top: var(--nav-h, 58px); background: var(--bg); z-index: 5;
+  position: sticky; top: 0; background: var(--surface); z-index: 5;
+  box-shadow: 0 1px 0 var(--line);
   transition: color var(--dur-fast);
 }
+.jt thead th:first-child { border-top-left-radius: var(--r-lg); }
+.jt thead th:last-child { border-top-right-radius: var(--r-lg); }
 .jt thead th:hover { color: var(--ink); }
 .jt thead th .arrow { color: var(--faint); margin-left: var(--sp-1); vertical-align: middle; }
 .jt thead th.sorted { color: var(--teal); }
 .jt thead th.sorted .arrow { color: var(--teal); }
 .jt tbody td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); vertical-align: middle; }
 .jt tbody tr { cursor: pointer; transition: background var(--dur-fast); }
+.jt tbody tr:last-child td { border-bottom: none; }
 .jt tbody tr:hover { background: var(--surface-2); }
 .jt tbody tr:nth-child(even) td { background: color-mix(in oklch, var(--surface-2) 45%, transparent); }
 .jt tbody tr:hover td { background: var(--surface-2); }
 .jt .c-title { font-weight: 600; max-width: 260px; }
 .jt .c-muted { color: var(--muted); }
 .jt .na { color: var(--faint); }
+
+/* Firefox + WebKit scrollbar styling so the self-scrolling card doesn't
+   default to a jarring full-size native bar inside a rounded card. */
+.tablecard { scrollbar-width: thin; scrollbar-color: var(--faint) transparent; }
+.tablecard::-webkit-scrollbar { width: 10px; height: 10px; }
+.tablecard::-webkit-scrollbar-thumb { background: var(--faint); border-radius: var(--r-pill); border: 2px solid var(--surface); }
+.tablecard::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.tablecard::-webkit-scrollbar-track { background: transparent; }
 
 .status-pill {
   display: inline-block; font-size: var(--text-sm); text-transform: capitalize;

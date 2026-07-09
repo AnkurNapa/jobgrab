@@ -93,7 +93,8 @@ function renderPeople() {
     tb.appendChild(tr);
   });
   table.appendChild(tb);
-  const wrap = el("div", "tablewrap"); wrap.appendChild(table); host.appendChild(wrap);
+  const card = el("div", "tablecard"); card.appendChild(table);
+  const wrap = el("div", "tablewrap"); wrap.appendChild(card); host.appendChild(wrap);
 }
 
 // ---------- Companies roll-up ----------
@@ -142,7 +143,8 @@ function renderCompanies() {
     tb.appendChild(tr);
   });
   table.appendChild(tb);
-  const wrap = el("div", "tablewrap"); wrap.appendChild(table); host.appendChild(wrap);
+  const card = el("div", "tablecard"); card.appendChild(table);
+  const wrap = el("div", "tablewrap"); wrap.appendChild(card); host.appendChild(wrap);
 }
 
 // ---------- pipeline summary ----------
@@ -428,18 +430,6 @@ function paintIcons(root = document) {
   });
 }
 
-// ---------- sticky table header offset: track the real .nav height ----------
-// The table header is sticky at top: var(--nav-h), so it sits flush under the
-// nav bar. A hardcoded px guess drifts whenever the nav's rendered height
-// changes (font metrics, zoom, OS chrome) and ends up overlapping the row
-// scrolled beneath it -- clipping whatever cell sits at the top of a tall
-// (wrapped-title) row. Measuring the live element keeps it correct always.
-function syncNavHeight() {
-  const nav = document.querySelector(".nav");
-  if (!nav) return;
-  document.documentElement.style.setProperty("--nav-h", `${nav.offsetHeight}px`);
-}
-
 // ---------- theme: OS default, with an explicit user override persisted locally ----------
 function applyTheme(mode) {
   if (mode === "light" || mode === "dark") document.documentElement.dataset.theme = mode;
@@ -464,9 +454,6 @@ function initTheme() {
 try {
   paintIcons();
   initTheme();
-  syncNavHeight();
-  const navEl = document.querySelector(".nav");
-  if (navEl && typeof ResizeObserver !== "undefined") new ResizeObserver(syncNavHeight).observe(navEl);
   document.querySelectorAll(".nav__tab").forEach((t) => t.addEventListener("click", () => { statusFilter = null; setView(t.dataset.view); if (t.dataset.view === "jobs") renderTable(); }));
   $("search").addEventListener("input", renderTable);
   $("export").addEventListener("click", exportCsv);
