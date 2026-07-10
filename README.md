@@ -83,6 +83,8 @@ The tracker board (`app/index.html`) lists saved jobs with search, status pipeli
 
 ## Install (Load unpacked)
 
+📺 **[Watch the install walkthrough](https://youtu.be/F8AIdiV8dHw)** if you'd rather follow along on video than text.
+
 1. Open `chrome://extensions` in Chrome.
 2. Toggle **Developer mode** on (top right).
 3. Click **Load unpacked** and select this folder: `~/Desktop/teal-linkedin-tracker`.
