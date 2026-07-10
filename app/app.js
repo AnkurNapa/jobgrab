@@ -1,6 +1,8 @@
-import { getJobs, updateJob, deleteJob, saveJob, STATUSES } from "../lib/store.js";
+import { getJobs, updateJob, deleteJob, saveJob, importJobs, STATUSES } from "../lib/store.js";
 import { toISO, fmt, daysUntil } from "../lib/dates.js";
 import { svg, iconEl } from "../lib/icons.js";
+import { computeAttention, isOverdueFollowUp, isStaleApplication, isDeadlineSoon, computeSearchHealth, computeSearchHealthByPlatform } from "../lib/insights.js";
+import { PLATFORMS, platformInfo } from "../lib/platforms.js";
 
 const $ = (id) => document.getElementById(id);
 let allJobs = [];
@@ -8,6 +10,9 @@ let activeId = null;
 let activeTab = "info";
 let view = "jobs"; // jobs | detail | people | companies
 let statusFilter = null;
+let attentionFilter = null; // null | "overdueFollowUp" | "staleApplication" | "deadlineSoon"
+let platformFilter = ""; // "" (all) | a lib/platforms.js key, e.g. "linkedin"
+let dateFilter = "all"; // all | day | week | month | year -- rolling window on savedAt
 let sortKey = "savedAt";
 let sortDir = -1; // -1 desc, 1 asc
 
@@ -18,6 +23,16 @@ const el = (tag, cls, text) => {
   if (text != null) n.textContent = text;
   return n;
 };
+
+// Rolling windows on savedAt (epoch ms), not calendar boundaries -- "this
+// week" means the last 7 days from now, not since Monday. Simpler to reason
+// about and avoids locale-dependent week-start ambiguity.
+const DATE_WINDOW_MS = { day: 1, week: 7, month: 30, year: 365 };
+function inDateWindow(savedAt, range) {
+  if (range === "all" || !DATE_WINDOW_MS[range]) return true;
+  if (!savedAt) return false;
+  return Date.now() - savedAt <= DATE_WINDOW_MS[range] * 86400000;
+}
 function htmlToText(html) {
   if (!html) return "";
   const doc = new DOMParser().parseFromString(html, "text/html");
@@ -196,10 +211,86 @@ function extractSkills(title) {
   return SKILL_KEYWORDS.filter((kw) => skillPattern(kw).test(t));
 }
 
+// "How's my search actually going" -- funnel + pacing, distinct from the
+// skills/keyword analysis below. Only meaningful once jobs have moved past
+// "saved" into the real funnel, so it stays quiet until there's signal.
+function healthTile(label, value, sub, tone) {
+  const t = el("div", "health-tile" + (tone ? ` health-tile--${tone}` : ""));
+  t.append(el("span", "health-tile__label", label), el("span", "health-tile__value", value), el("span", "health-tile__sub", sub));
+  return t;
+}
+
+function renderSearchHealth(jobs) {
+  const section = el("div", "health-section");
+  section.appendChild(el("h3", "sect", "Job search health"));
+  const health = computeSearchHealth(jobs);
+
+  if (health.appliedTotal === 0) {
+    section.appendChild(el("p", "empty",
+      "Mark a few saved jobs as applied to see response rate, interview rate, ghost rate, and pacing here."));
+    return section;
+  }
+
+  const pct = (r) => (r == null ? "--" : `${Math.round(r * 100)}%`);
+  const row = el("div", "health-row");
+  row.appendChild(healthTile("Response rate", pct(health.responseRate), `${health.respondedCount} of ${health.appliedTotal} applied`));
+  row.appendChild(healthTile("Interview rate", pct(health.interviewRate), `${health.interviewedCount} reached interviewing+`));
+  row.appendChild(healthTile(
+    "Ghost rate", pct(health.ghostRate), `${health.ghostedCount} no response`,
+    health.ghostRate != null && health.ghostRate >= 0.5 ? "warn" : null
+  ));
+  const trend = health.appliedLast7 - health.appliedPrev7;
+  const trendLabel = trend > 0 ? `up ${trend} vs prior week` : trend < 0 ? `down ${Math.abs(trend)} vs prior week` : "same as prior week";
+  row.appendChild(healthTile("Applied this week", String(health.appliedLast7), trendLabel));
+  row.appendChild(healthTile(
+    "Median days to apply", health.medianDaysToApply == null ? "--" : `${health.medianDaysToApply}d`,
+    "from save to applied"
+  ));
+  section.appendChild(row);
+
+  const byPlatform = computeSearchHealthByPlatform(jobs);
+  if (byPlatform.length > 1) {
+    section.appendChild(renderPlatformHealthTable(byPlatform));
+  }
+  return section;
+}
+
+// "Where should I actually be spending my time" -- same funnel as above,
+// split by job board. Only rendered once 2+ platforms have applied-or-beyond
+// jobs; a single-platform search has nothing to compare against.
+function renderPlatformHealthTable(rows) {
+  const wrap = el("div", "platform-health");
+  wrap.appendChild(el("h4", "platform-health__title", "By platform"));
+  const table = el("table", "platform-health__table");
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  ["Platform", "Applied", "Response", "Interview", "Ghost"].forEach((label) => headRow.appendChild(el("th", null, label)));
+  thead.appendChild(headRow);
+  table.appendChild(thead);
+  const tbody = document.createElement("tbody");
+  const pct = (r) => (r == null ? "--" : `${Math.round(r * 100)}%`);
+  rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    const platformCell = document.createElement("td");
+    platformCell.appendChild(platformBadge(r.source));
+    tr.appendChild(platformCell);
+    tr.appendChild(el("td", null, String(r.appliedTotal)));
+    tr.appendChild(el("td", null, pct(r.responseRate)));
+    tr.appendChild(el("td", null, pct(r.interviewRate)));
+    const ghostTd = el("td", r.ghostRate != null && r.ghostRate >= 0.5 ? "c-danger" : null, pct(r.ghostRate));
+    tr.appendChild(ghostTd);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+  return wrap;
+}
+
 function renderSkills() {
   const host = $("stub-view");
   host.textContent = "";
   host.append(el("h2", null, "Skills"));
+  host.appendChild(renderSearchHealth(allJobs));
 
   const counts = new Map();
   allJobs.forEach((j) => {
@@ -604,6 +695,34 @@ function radarChart(entries) {
   return wrap;
 }
 
+// ---------- needs attention ----------
+const ATTENTION_CHIPS = [
+  { key: "overdueFollowUp", label: "Follow-up due" },
+  { key: "staleApplication", label: "Gone quiet" },
+  { key: "deadlineSoon", label: "Deadline this week" },
+];
+
+function renderAttention() {
+  const host = $("attention");
+  if (!host) return;
+  host.textContent = "";
+  const a = computeAttention(allJobs);
+  if (a.total === 0) { host.hidden = true; return; }
+  host.hidden = false;
+  ATTENTION_CHIPS.forEach(({ key, label }) => {
+    const n = a[key].length;
+    if (!n) return;
+    const chip = el("button", "attn-chip" + (attentionFilter === key ? " is-active" : ""));
+    chip.append(el("span", "attn-chip__count", String(n)), el("span", "attn-chip__label", label));
+    chip.addEventListener("click", () => {
+      attentionFilter = attentionFilter === key ? null : key;
+      renderAttention();
+      renderTable();
+    });
+    host.appendChild(chip);
+  });
+}
+
 // ---------- pipeline summary ----------
 function renderPipeline() {
   const pipe = $("pipeline");
@@ -624,6 +743,7 @@ function renderPipeline() {
 // ---------- table ----------
 const COLUMNS = [
   { key: "title", label: "Job Position", cls: "c-title" },
+  { key: "source", label: "Platform" },
   { key: "company", label: "Company" },
   { key: "salary", label: "Max. Salary" },
   { key: "location", label: "Location" },
@@ -634,6 +754,15 @@ const COLUMNS = [
   { key: "followUpAt", label: "Follow up" },
   { key: "excitement", label: "Excitement" },
 ];
+
+function platformBadge(source) {
+  const p = platformInfo(source);
+  const badge = el("span", "platform-badge");
+  badge.style.setProperty("--platform-color", p.color);
+  badge.title = p.label;
+  badge.append(el("span", "platform-badge__icon", p.abbr), el("span", "platform-badge__label", p.label));
+  return badge;
+}
 
 function renderTable() {
   const head = $("jt-head");
@@ -651,9 +780,13 @@ function renderTable() {
     head.appendChild(th);
   });
 
+  const ATTENTION_PREDICATES = { overdueFollowUp: isOverdueFollowUp, staleApplication: isStaleApplication, deadlineSoon: isDeadlineSoon };
   const q = $("search").value.trim().toLowerCase();
   let rows = allJobs
     .filter((j) => !statusFilter || j.status === statusFilter)
+    .filter((j) => !attentionFilter || ATTENTION_PREDICATES[attentionFilter](j))
+    .filter((j) => !platformFilter || j.source === platformFilter)
+    .filter((j) => inDateWindow(j.savedAt, dateFilter))
     .filter((j) => !q || (j.title + " " + j.company).toLowerCase().includes(q));
 
   rows.sort((a, b) => {
@@ -667,7 +800,13 @@ function renderTable() {
 
   const body = $("jt-body");
   body.textContent = "";
-  $("count").textContent = `${rows.length} job${rows.length === 1 ? "" : "s"}` + (statusFilter ? ` · ${statusFilter}` : "");
+  const DATE_LABELS = { day: "today", week: "this week", month: "this month", year: "this year" };
+  const filterBits = [
+    statusFilter,
+    platformFilter ? platformInfo(platformFilter).label : "",
+    DATE_LABELS[dateFilter] || "",
+  ].filter(Boolean);
+  $("count").textContent = `${rows.length} job${rows.length === 1 ? "" : "s"}` + (filterBits.length ? ` · ${filterBits.join(" · ")}` : "");
   $("table-empty").hidden = allJobs.length > 0;
 
   rows.forEach((job) => {
@@ -682,6 +821,9 @@ function renderTable() {
       tr.addEventListener("click", () => openDetail(job.id));
 
       tr.appendChild(el("td", "c-title", job.title || "(untitled)"));
+      const src = document.createElement("td");
+      src.appendChild(platformBadge(job.source));
+      tr.appendChild(src);
       tr.appendChild(el("td", null, job.company || ""));
       tr.appendChild(el("td", job.salary ? "" : "c-muted", job.salary || "US$0"));
       tr.appendChild(el("td", null, job.location || ""));
@@ -789,6 +931,7 @@ function renderDetail() {
 
   if (job.contactLinkedIn) { const a = node.querySelector("#d-contact-open"); a.hidden = false; a.href = job.contactLinkedIn; }
   node.querySelector("#d-desc").textContent = htmlToText(job.descriptionHtml) || "No description captured.";
+  node.querySelector("#d-outreach").addEventListener("click", () => draftOutreach(job).catch(showError));
   node.querySelector("#d-delete").addEventListener("click", async () => { await deleteJob(job.id); activeId = null; setView("jobs"); await load(); });
 
   host.appendChild(node);
@@ -815,13 +958,14 @@ async function load() {
   allJobs = await getJobs();
   if (activeId && !allJobs.some((j) => j.id === activeId)) activeId = null;
   renderPipeline();
+  renderAttention();
   if (view === "detail") renderDetail(); else renderTable();
 }
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.jobs) load(); });
 
 // ---------- CSV ----------
 function exportCsv() {
-  const cols = ["externalId", "title", "company", "location", "workplaceType", "employmentType",
+  const cols = ["externalId", "source", "title", "company", "location", "workplaceType", "employmentType",
     "salary", "status", "excitement", "posted", "deadline", "appliedAt", "followUpAt",
     "contactName", "contactTitle", "contactLinkedIn", "applyUrl", "url", "savedAt"];
   const esc = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
@@ -831,6 +975,204 @@ function exportCsv() {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = "jobgrab-export.csv"; a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// ---------- JSON backup / cross-device sync ----------
+// Unlike CSV (a lossy, human-readable snapshot), this is every field on
+// every job, round-trippable back into importJobs() on another device --
+// chrome.storage.local never syncs across machines on its own, so this is
+// the only way to move a tracker between browsers/computers.
+function exportJson() {
+  const blob = new Blob([JSON.stringify(allJobs, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = URL.createObjectURL(blob); a.download = `jobgrab-backup-${stamp}.json`; a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function importJsonFile(file) {
+  if (!file) return;
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (_) {
+    showToast("That file isn't valid JSON -- nothing was imported."); return;
+  }
+  if (!Array.isArray(parsed)) {
+    showToast("Expected a JobGrab JSON export (a list of jobs) -- nothing was imported."); return;
+  }
+  const result = await importJobs(parsed);
+  await load();
+  showToast(`Import done: ${result.added} added, ${result.merged} updated, ${result.unchanged} already up to date${result.skipped ? `, ${result.skipped} skipped` : ""}.`);
+}
+
+// ---------- chat with Claude (claude.ai handoff, no API key) ----------
+// Builds a markdown snapshot of the tracker and copies it to the clipboard,
+// then opens claude.ai/new so the user can paste it and start asking
+// questions with their existing claude.ai login -- no API key stored, no
+// data leaves the browser except via the user's own paste.
+function buildClaudeBrief(jobs) {
+  const counts = STATUSES.reduce((acc, s) => ((acc[s] = 0), acc), {});
+  jobs.forEach((j) => { if (counts[j.status] != null) counts[j.status]++; });
+  const summary = STATUSES.map((s) => `${s}: ${counts[s]}`).join(", ");
+
+  const cols = ["Title", "Platform", "Company", "Status", "Location", "Salary", "Posted", "Deadline", "Applied", "Follow up", "Notes"];
+  const trim = (v, n) => { const s = String(v ?? "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const rows = jobs
+    .slice()
+    .sort((a, b) => (b.savedAt || 0) - (a.savedAt || 0))
+    .map((j) => [
+      trim(j.title, 60), platformInfo(j.source).label, trim(j.company, 40), j.status || "", trim(j.location, 30),
+      trim(j.salary, 24), j.posted || "", j.deadline || "", j.appliedAt || "", j.followUpAt || "",
+      trim(j.notes, 80),
+    ].map((v) => String(v).replace(/\|/g, "/")).join(" | "));
+
+  const table = [
+    `| ${cols.join(" | ")} |`,
+    `| ${cols.map(() => "---").join(" | ")} |`,
+    ...rows.map((r) => `| ${r} |`),
+  ].join("\n");
+
+  return (
+    `Here is my LinkedIn job search tracker (${jobs.length} jobs, exported from JobGrab). ` +
+    `Pipeline: ${summary}.\n\nHelp me: spot stale applications that need a follow-up, flag upcoming deadlines, ` +
+    `suggest which roles to prioritize, and answer any questions I ask about this data.\n\n${table}`
+  );
+}
+
+async function copyToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (_) { ok = false; }
+    document.body.removeChild(ta);
+    return ok;
+  }
+}
+
+let toastTimer = null;
+function showToast(text) {
+  let node = document.getElementById("jg-toast");
+  if (!node) {
+    node = document.createElement("div");
+    node.id = "jg-toast";
+    node.className = "toast";
+    document.body.appendChild(node);
+  }
+  node.textContent = text;
+  node.classList.add("is-visible");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => node.classList.remove("is-visible"), 4000);
+}
+
+// Claude.ai can't be embedded in an iframe (Anthropic blocks framing), so a
+// truly in-page docked panel isn't possible. This is the closest real
+// equivalent: a genuine claude.ai browser window, docked to the right edge
+// of the screen next to the tracker, reused across clicks instead of
+// stacking a new window every time.
+let claudeWindowId = null;
+chrome.windows.onRemoved.addListener((id) => { if (id === claudeWindowId) claudeWindowId = null; });
+
+// Shared by "Chat with Claude" (whole tracker) and "Draft outreach" (one
+// job): stage a prompt for content/claude-autofill.js, then open or refocus
+// the docked window. readyLabel names what's being loaded, e.g. "12 jobs"
+// or "an outreach draft for Acme Corp".
+async function sendToClaude(promptText, readyLabel) {
+  const copied = await copyToClipboard(promptText); // kept as a fallback if autofill can't find the composer
+  const readyMsg = `Loading ${readyLabel} into the docked Claude window...`;
+  const fallbackMsg = copied
+    ? `Opened Claude, but the data may not have auto-filled -- it's on your clipboard, so paste it in if the box is empty.`
+    : `Opened Claude, but couldn't stage the data automatically -- copy it manually and paste it in.`;
+
+  // Stash the prompt for content/claude-autofill.js to pick up once claude.ai loads.
+  await chrome.storage.local.set({ jobgrabPendingChat: { text: promptText, ts: Date.now() } });
+
+  if (claudeWindowId != null) {
+    try {
+      await chrome.windows.update(claudeWindowId, { focused: true });
+      const [tab] = await chrome.tabs.query({ windowId: claudeWindowId });
+      if (tab) await chrome.tabs.update(tab.id, { url: "https://claude.ai/new" }); // fresh chat + reruns autofill
+      showToast(readyMsg);
+      return;
+    } catch (_) {
+      claudeWindowId = null; // the docked window was closed since -- open a fresh one below
+    }
+  }
+
+  const width = 460;
+  const height = screen.availHeight;
+  const left = Math.max(0, screen.availWidth - width);
+  try {
+    const win = await chrome.windows.create({ url: "https://claude.ai/new", type: "popup", width, height, top: 0, left });
+    claudeWindowId = win.id;
+    showToast(readyMsg);
+  } catch (_) {
+    showToast(fallbackMsg);
+  }
+}
+
+async function chatWithClaude() {
+  if (!allJobs.length) { showToast("No jobs saved yet -- nothing to send to Claude."); return; }
+  await sendToClaude(buildClaudeBrief(allJobs), `${allJobs.length} jobs`);
+}
+
+// ---------- draft outreach (per-job Claude handoff) ----------
+// Same docked-window mechanism as chatWithClaude, but scoped to one job:
+// its description plus your saved resume text (if you've pasted one via
+// "Set my resume"), asking Claude to draft a tailored note. Resume text is
+// optional -- Claude can still draft a generic tailored note off the job
+// description alone, just without matching it against your background.
+const RESUME_KEY = "jobgrabResumeText";
+
+async function getResumeText() {
+  const res = await chrome.storage.local.get(RESUME_KEY);
+  return res[RESUME_KEY] || "";
+}
+
+async function promptForResume() {
+  const current = await getResumeText();
+  const next = window.prompt(
+    "Paste your resume text (used only to tailor outreach drafts -- stored locally, never sent anywhere but the Claude tab you open yourself). Leave blank and cancel to keep the current one.",
+    current
+  );
+  if (next == null) return current; // cancelled
+  await chrome.storage.local.set({ [RESUME_KEY]: next.trim() });
+  showToast(next.trim() ? "Resume saved for outreach drafts." : "Resume cleared.");
+  return next.trim();
+}
+
+function buildOutreachPrompt(job, resumeText) {
+  const desc = htmlToText(job.descriptionHtml);
+  const parts = [
+    `Draft a short, specific outreach note (a LinkedIn message to a recruiter/hiring manager, or a brief cover-note paragraph -- pick whichever fits) for this role:`,
+    ``,
+    `Title: ${job.title || "(untitled)"}`,
+    `Company: ${job.company || ""}`,
+    job.location ? `Location: ${job.location}` : "",
+    job.contactName ? `Addressed to: ${job.contactName}${job.contactTitle ? " (" + job.contactTitle + ")" : ""}` : "",
+    ``,
+    desc ? `Job description:\n${desc.slice(0, 6000)}` : `(No job description was captured for this listing.)`,
+  ];
+  if (resumeText) {
+    parts.push("", `My background (resume text) to tailor the note against:`, resumeText.slice(0, 6000));
+  } else {
+    parts.push("", `I haven't provided my resume -- keep the note generic but specific to the role, and ask me what to emphasize about my background.`);
+  }
+  parts.push("", `Keep it concise (under 150 words), warm but professional, no generic filler.`);
+  return parts.filter((l) => l !== "").join("\n");
+}
+
+async function draftOutreach(job) {
+  const resumeText = await getResumeText();
+  await sendToClaude(buildOutreachPrompt(job, resumeText), `an outreach draft for ${job.company || job.title || "this job"}`);
 }
 
 // ---------- daily inspiration quote (rotates once per day) ----------
@@ -910,13 +1252,34 @@ function initTheme() {
   });
 }
 
+function populatePlatformFilter() {
+  const sel = $("platform-filter");
+  Object.entries(PLATFORMS).forEach(([key, p]) => {
+    const opt = document.createElement("option");
+    opt.value = key;
+    opt.textContent = p.label;
+    sel.appendChild(opt);
+  });
+}
+
 // ---------- wire ----------
 try {
   paintIcons();
   initTheme();
   document.querySelectorAll(".nav__tab").forEach((t) => t.addEventListener("click", () => { statusFilter = null; setView(t.dataset.view); if (t.dataset.view === "jobs") renderTable(); }));
   $("search").addEventListener("input", renderTable);
+  populatePlatformFilter();
+  $("platform-filter").addEventListener("change", (e) => { platformFilter = e.target.value; renderTable(); });
+  $("date-filter").addEventListener("change", (e) => { dateFilter = e.target.value; renderTable(); });
   $("export").addEventListener("click", exportCsv);
+  $("export-json").addEventListener("click", exportJson);
+  $("import-json").addEventListener("click", () => $("import-json-file").click());
+  $("import-json-file").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    importJsonFile(file).catch(showError).finally(() => { e.target.value = ""; });
+  });
+  $("chat-claude").addEventListener("click", () => chatWithClaude().catch(showError));
+  $("set-resume").addEventListener("click", () => promptForResume().catch(showError));
   $("add").addEventListener("click", addJob);
   renderDailyQuote();
   setView("jobs");

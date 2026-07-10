@@ -24,15 +24,33 @@
     <!-- Pipeline summary -->
     <section id="pipeline" class="pipe" aria-label="Status summary"></section>
 
+    <!-- Needs attention: overdue follow-ups, stale applications, deadlines coming up -->
+    <section id="attention" class="attn" aria-label="Needs attention" hidden></section>
+
     <!-- Toolbar -->
     <div class="toolbar">
       <span class="toolbar__searchwrap">
         <span class="ic" data-icon="search"></span>
         <input id="search" class="toolbar__search" type="search" placeholder="Search jobs" />
       </span>
+      <select id="platform-filter" class="toolbar__select" aria-label="Filter by platform">
+        <option value="">All platforms</option>
+      </select>
+      <select id="date-filter" class="toolbar__select" aria-label="Filter by date saved">
+        <option value="all">All time</option>
+        <option value="day">Today</option>
+        <option value="week">This week</option>
+        <option value="month">This month</option>
+        <option value="year">This year</option>
+      </select>
       <span id="count" class="toolbar__count"></span>
       <div class="toolbar__spacer"></div>
+      <button id="set-resume" class="btn btn--ghost" data-icon="resume" title="Paste your resume text, used to tailor outreach drafts">Set resume</button>
+      <button id="chat-claude" class="btn btn--ghost" data-icon="sparkle" title="Opens a docked Claude window beside the tracker">Chat with Claude</button>
       <button id="export" class="btn btn--ghost" data-icon="download">Export CSV</button>
+      <button id="export-json" class="btn btn--ghost" data-icon="download" title="Full-fidelity backup, for moving your tracker to another device">Export JSON</button>
+      <button id="import-json" class="btn btn--ghost" data-icon="download" title="Load a JobGrab JSON export -- merges, never overwrites existing edits">Import JSON</button>
+      <input id="import-json-file" type="file" accept="application/json,.json" hidden />
       <button id="add" class="btn" data-icon="plus">Add Job</button>
     </div>
 
@@ -71,6 +89,7 @@
         </div>
         <div class="jd-head__aside">
           <div id="d-stars" class="stars" title="Excitement"></div>
+          <button id="d-outreach" class="btn btn--ghost" data-icon="sparkle">Draft outreach</button>
           <button id="d-delete" class="btn btn--danger" data-icon="trash">Delete</button>
         </div>
       </header>

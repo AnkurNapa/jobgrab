@@ -1,7 +1,11 @@
 // inject.js - floating JobGrab button that opens an inline editable panel on
-// LinkedIn job pages. Hardened for iframes, SPA route changes, DOM churn,
-// double-clicks, storage limits and extension reloads. The panel lives in a
-// Shadow DOM so LinkedIn's CSS cannot distort the form.
+// any supported job board (LinkedIn, Indeed, Naukri, Wellfound, Glassdoor).
+// Site-specific extraction lives in content/scraper-<site>.js, each of which
+// sets window.__jobGrabSource/__jobGrabCurrentId/__jobGrabOnJobPage/__jobGrabScrape
+// before this script runs -- this file itself has no site-specific logic.
+// Hardened for iframes, SPA route changes, DOM churn, double-clicks, storage
+// limits and extension reloads. The panel lives in a Shadow DOM so the host
+// site's CSS cannot distort the form.
 
 (function () {
   if (window.top !== window.self) return; // avoid duplicate buttons in iframes
@@ -53,10 +57,9 @@
   function handleDead() { if (dead) return; dead = true; setButtonState("error", "Reload page"); closePanel(); log("context invalidated - reload tab"); }
 
   function currentJobId() {
-    let u; try { u = new URL(location.href); } catch (_) { return null; }
-    return u.searchParams.get("currentJobId") || (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1] || null;
+    try { return window.__jobGrabCurrentId ? window.__jobGrabCurrentId() : null; } catch (_) { return null; }
   }
-  const onJobContext = () => /\/jobs\//.test(location.pathname) || !!currentJobId();
+  const onJobContext = () => { try { return window.__jobGrabOnJobPage ? !!window.__jobGrabOnJobPage() : false; } catch (_) { return false; } };
   async function send(msg) { if (!contextAlive()) { handleDead(); throw new Error("dead"); } return chrome.runtime.sendMessage(msg); }
 
   // ---------- Floating button ----------
@@ -116,10 +119,12 @@
     root.innerHTML = `
       <style>
         :host { all: initial; }
-        .p { position: fixed; right: 20px; bottom: 74px; width: 320px; max-height: 74vh; overflow-y: auto;
-             background:#fff; color:#1a1f24; border:1px solid #e5e7eb; border-radius:14px;
+        .p { position: fixed; right: clamp(10px, 2vw, 20px); bottom: clamp(64px, 9vh, 74px);
+             width: clamp(260px, 92vw, 320px); max-height: min(74vh, calc(100vh - 96px));
+             overflow-y: auto; background:#fff; color:#1a1f24; border:1px solid #e5e7eb; border-radius:14px;
              box-shadow:0 12px 40px rgba(0,0,0,.22); z-index:2147483646;
              font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; padding:14px; }
+        @media (max-width: 420px) { .p { right: 8px; left: 8px; width: auto; } }
         .hd { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
         .hd b { color:#0a7d6b; font-size:14px; } .x { border:0; background:none; font-size:20px; cursor:pointer; color:#6b7280; }
         .meta { color:#6b7280; font-size:11.5px; margin:-2px 0 10px; }
@@ -134,11 +139,14 @@
         .link { color:#0a7d6b; font-weight:600; text-decoration:none; font-size:12px; }
         .status { font-size:12px; color:#157347; min-height:14px; margin-top:6px; }
         .status.err { color:#b02a37; }
+        .dupe { font-size:12px; color:#8a5a00; background:#fff6e5; border:1px solid #f3d9a0;
+             border-radius:8px; padding:8px 10px; margin:-2px 0 10px; }
         .hidden { display:none; }
       </style>
       <div class="p" role="dialog" aria-label="Save job to JobGrab">
         <div class="hd"><b>Save to JobGrab</b><button class="x" title="Close">&times;</button></div>
         <div class="meta" id="meta"></div>
+        <div class="dupe hidden" id="dupe"></div>
         <div id="form"></div>
         <div class="actions">
           <button class="save" id="save">Save job</button>
@@ -177,6 +185,7 @@
     const root = ensureHost();
     root.querySelector(".p").classList.remove("hidden");
     const msg = root.getElementById("msg"); msg.textContent = ""; msg.classList.remove("err");
+    const dupeBox = root.getElementById("dupe"); dupeBox.classList.add("hidden"); dupeBox.textContent = "";
     panelOpen = true;
 
     if (!onJobContext()) {
@@ -184,7 +193,7 @@
       currentScrape = null;
     } else {
       const s = window.__jobGrabScrape ? window.__jobGrabScrape() : null;
-      currentScrape = s || { source: "linkedin", externalId: currentJobId(), url: location.href };
+      currentScrape = s || { source: window.__jobGrabSource || "unknown", externalId: currentJobId(), url: location.href };
       const parts = [s && s.workplaceType, s && s.employmentType, s && s.applicants, s && s.postedText].filter(Boolean);
       root.getElementById("meta").textContent = parts.join(" · ") || "Details autofilled where available. Add deadline / contact below.";
       // Prefill from scrape
@@ -195,6 +204,21 @@
         const res = await send({ type: "GET_JOB", key });
         if (res && res.job) { FIELDS.forEach(([k]) => { if (res.job[k]) setVal(root, k, res.job[k]); }); msg.textContent = "Already saved - editing updates it."; }
       } catch (_) {}
+      // Cross-platform duplicate check: same company + high title overlap on
+      // a DIFFERENT board, which store.js's exact id/url key can't catch
+      // since a cross-posted role has no shared id. Warning only, never
+      // blocks the save -- it's genuinely two different applications if you
+      // apply on both.
+      if (s && s.title && s.company) {
+        try {
+          const dupeRes = await send({ type: "FIND_DUPLICATES", candidate: { source: s.source, title: s.title, company: s.company } });
+          const top = dupeRes && dupeRes.matches && dupeRes.matches[0];
+          if (top) {
+            dupeBox.textContent = `Looks like you already saved "${top.title}" at ${s.company} via ${top.source} (${top.status}). This may be the same role cross-posted.`;
+            dupeBox.classList.remove("hidden");
+          }
+        } catch (_) {}
+      }
     }
   }
   function closePanel() { const host = document.getElementById(HOST_ID); if (host && host.shadowRoot) host.shadowRoot.querySelector(".p").classList.add("hidden"); panelOpen = false; }
@@ -207,7 +231,7 @@
     FIELDS.forEach(([k]) => { const v = getVal(root, k); if (v) payload[k] = v; });
     if (!payload.title && !payload.company) { msg.textContent = "Enter at least a title or company."; msg.classList.add("err"); return; }
     if (!payload.url) payload.url = location.href;
-    if (!payload.source) payload.source = "linkedin";
+    if (!payload.source) payload.source = window.__jobGrabSource || "unknown";
     saving = true; btn.disabled = true; msg.classList.remove("err"); msg.textContent = "Saving...";
     try {
       const res = await send({ type: "SAVE_JOB", job: payload });

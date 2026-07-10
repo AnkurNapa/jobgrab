@@ -4,8 +4,8 @@
 
 .jobgrab-fab {
   position: fixed;
-  right: 20px;
-  bottom: 20px;
+  right: clamp(10px, 2vw, 20px);
+  bottom: clamp(10px, 2vh, 20px);
   z-index: 2147483647;
   display: inline-flex;
   align-items: center;

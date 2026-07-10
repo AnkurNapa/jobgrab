@@ -1,10 +1,25 @@
 {
   "manifest_version": 3,
-  "name": "JobGrab - LinkedIn Job Tracker",
-  "version": "0.2.0",
-  "description": "One-click save LinkedIn jobs into a Kanban tracker. A Teal-style job search companion.",
-  "permissions": ["storage", "activeTab", "scripting", "alarms"],
-  "host_permissions": ["https://*.linkedin.com/*"],
+  "name": "JobGrab - Job Tracker",
+  "version": "0.6.0",
+  "description": "One-click save jobs from LinkedIn, Indeed, Naukri, Wellfound and Glassdoor into a Kanban tracker. A Teal-style job search companion.",
+  "permissions": ["storage", "activeTab", "scripting", "alarms", "clipboardWrite", "tabs", "notifications"],
+  "host_permissions": [
+    "https://*.linkedin.com/*",
+    "https://*.indeed.com/*",
+    "https://*.naukri.com/*",
+    "https://wellfound.com/*",
+    "https://*.glassdoor.com/*",
+    "https://*.glassdoor.co.in/*",
+    "https://*.glassdoor.co.uk/*",
+    "https://*.glassdoor.de/*",
+    "https://*.glassdoor.com.au/*",
+    "https://*.glassdoor.ca/*",
+    "https://*.glassdoor.ie/*",
+    "https://*.glassdoor.sg/*",
+    "https://*.glassdoor.fr/*",
+    "https://claude.ai/*"
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_title": "JobGrab",
@@ -21,15 +36,68 @@
   "content_scripts": [
     {
       "matches": ["https://*.linkedin.com/*"],
-      "js": ["content/scraper.js", "content/inject.js"],
+      "js": ["content/scraper-lib.js", "content/scraper-linkedin.js", "content/inject.js"],
       "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.indeed.com/*"],
+      "js": ["content/scraper-lib.js", "content/scraper-indeed.js", "content/inject.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://*.naukri.com/*"],
+      "js": ["content/scraper-lib.js", "content/scraper-naukri.js", "content/inject.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://wellfound.com/*"],
+      "js": ["content/scraper-lib.js", "content/scraper-wellfound.js", "content/inject.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://*.glassdoor.com/*",
+        "https://*.glassdoor.co.in/*",
+        "https://*.glassdoor.co.uk/*",
+        "https://*.glassdoor.de/*",
+        "https://*.glassdoor.com.au/*",
+        "https://*.glassdoor.ca/*",
+        "https://*.glassdoor.ie/*",
+        "https://*.glassdoor.sg/*",
+        "https://*.glassdoor.fr/*"
+      ],
+      "js": ["content/scraper-lib.js", "content/scraper-glassdoor.js", "content/inject.js"],
+      "css": ["content/overlay.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": ["content/claude-autofill.js"],
       "run_at": "document_idle"
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["icons/icon48.png", "icons/icon128.png"],
-      "matches": ["https://*.linkedin.com/*"]
+      "matches": [
+        "https://*.linkedin.com/*",
+        "https://*.indeed.com/*",
+        "https://*.naukri.com/*",
+        "https://wellfound.com/*",
+        "https://*.glassdoor.com/*",
+        "https://*.glassdoor.co.in/*",
+        "https://*.glassdoor.co.uk/*",
+        "https://*.glassdoor.de/*",
+        "https://*.glassdoor.com.au/*",
+        "https://*.glassdoor.ca/*",
+        "https://*.glassdoor.ie/*",
+        "https://*.glassdoor.sg/*",
+        "https://*.glassdoor.fr/*"
+      ]
     }
   ],
   "icons": {

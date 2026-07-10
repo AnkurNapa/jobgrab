@@ -1,5 +1,8 @@
-// scraper.js - LinkedIn job extraction with layered fallbacks.
-// Exposes window.__jobGrabScrape() returning a JobPosting-shaped object or null.
+// scraper-linkedin.js - LinkedIn job extraction with layered fallbacks.
+// Exposes window.__jobGrabScrape() returning a JobPosting-shaped object or null,
+// plus the three site-agnostic hooks inject.js drives across every job board:
+// __jobGrabSource (fixed string), __jobGrabCurrentId() (job id on this page,
+// or null), __jobGrabOnJobPage() (is this URL a viewable job posting).
 // Every selector is expected to break eventually, so we try several strategies
 // in priority order and never throw.
 
@@ -206,6 +209,14 @@
     };
   }
 
+  window.__jobGrabSource = "linkedin";
+  window.__jobGrabCurrentId = function () {
+    let u; try { u = new URL(location.href); } catch (_) { return null; }
+    return u.searchParams.get("currentJobId") || (location.pathname.match(/\/jobs\/view\/(\d+)/) || [])[1] || getJobId();
+  };
+  window.__jobGrabOnJobPage = function () {
+    return /\/jobs\//.test(location.pathname) || !!window.__jobGrabCurrentId();
+  };
   window.__jobGrabScrape = function () {
     try { return scrape(); } catch (e) {
       try { console.warn("[JobGrab] scrape error", e); } catch (_) {}
